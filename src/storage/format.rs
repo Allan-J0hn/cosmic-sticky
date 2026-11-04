@@ -36,15 +36,15 @@ fn yaml_err(e: impl fmt::Display) -> FormatError {
 struct Frontmatter {
     #[serde(default)]
     id: Option<Uuid>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     title: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     category: CategoryId,
     #[serde(default)]
     color_override: Option<Rgb>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     font: Font,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     mode: Mode,
     #[serde(default)]
     x: f32,
@@ -54,7 +54,7 @@ struct Frontmatter {
     width: f32,
     #[serde(default = "default_height")]
     height: f32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     output: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     output_desc: Option<String>,
@@ -64,6 +64,15 @@ struct Frontmatter {
     modified: Option<Timestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     trashed_at: Option<Timestamp>,
+}
+
+/// `title:` with no value is YAML null; treat it like a missing field.
+fn null_as_default<'de, D, T>(d: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
 }
 
 fn default_width() -> f32 {
@@ -349,6 +358,16 @@ mod tests {
 
         let (n, _) = note_from_markdown("---\n---\n", id, now).unwrap();
         assert_eq!(n.title, "");
+    }
+
+    #[test]
+    fn empty_values_mean_defaults() {
+        let text = "---\ntitle:\ncategory:\nfont: ~\nmode: null\noutput:\ncolor_override:\n---\n";
+        let (n, _) = note_from_markdown(text, Uuid::nil(), Timestamp::UNIX_EPOCH).unwrap();
+        assert_eq!(n.title, "");
+        assert_eq!(n.mode(), Mode::Text);
+        assert_eq!(n.output, "");
+        assert_eq!(n.color_override, None);
     }
 
     #[test]

@@ -188,11 +188,28 @@ Load and render notes from storage; edit title and body; debounced autosave; dra
 corner grip resize; header controls shown on hover; raise on click; text color from contrast;
 Escape unfocuses; output placement with fallback (a missing output is not rewritten);
 cross-output move on release; clamp on output resize.
-- [ ] Automated: type into the title and body. The file on disk matches within 1 s.
-- [ ] Automated: drag and resize land on the exact expected rectangle and are persisted.
-- [ ] Automated: kill and restart. Positions, sizes and text are identical (screenshot compare).
-- [ ] Automated: drag a note from eDP-1 to HDMI-A-1. Its `output` changes, and after restart it is still on HDMI-A-1.
-- [ ] Idle CPU 0 after editing stops. CPU while dragging recorded (release).
+- [x] Automated: type into the title and body. The file on disk matches within 1 s.
+  *Done* (`tools/e2e/m3.sh`): the title was saved 470 ms after the last key and the body 455 ms after.
+- [x] Automated: drag and resize land on the exact expected rectangle and are persisted.
+  *Done:* a header drag by (+500,+300) gave (700,500) in the file, and a grip drag by (+100,+100) gave 360×340.
+- [x] Automated: kill and restart. Positions, sizes and text are identical (screenshot compare).
+  *Done:* screenshots of both outputs before and after the restart are byte-identical.
+- [x] Automated: drag a note from eDP-1 to HDMI-A-1. Its `output` changes, and after restart it is still on HDMI-A-1.
+  *Done:* the file showed `output: HDMI-A-1` at (532,240). After the restart, the app reported the pointer over that note on HDMI-A-1.
+- [x] Idle CPU 0 after editing stops. CPU while dragging recorded (release).
+  *Done:* 0 ticks in 30 s after Escape, RSS 59 MB. Dragging for 2.7 s used 41 ticks (~15% of one core).
+  Open: idle CPU while a note keeps keyboard focus (caret blink after clicking bare desktop) is not yet measured.
+
+**M3 notes**
+- Display clamping is non-destructive. A note whose output shrank or vanished is shown clamped
+  (or on the top-left output) but its file is unchanged, so it returns when the output does.
+  Only a user drag rewrites `x/y/output`.
+- iced keeps widget state (focus, hover) by position in the tree, so raising a note reorders
+  state between notes. After a raise, the clicked editor is re-focused by id. Hover is computed
+  from the cursor, because `mouse_area` misses exits when the pointer leaves the input region.
+- Checklist notes render read-only until M4.
+- An empty `title:` in a hand-written file is YAML null and is now read as empty; it used to
+  quarantine the note. Found by the e2e fixture.
 
 ### M4 — Note features: category, color, font, checklist, "+"
 Category picker; color override with "reset to category color"; font picker (at most 5,

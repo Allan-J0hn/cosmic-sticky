@@ -7,7 +7,7 @@ pub mod note;
 
 pub use category::{Categories, Category, CategoryError, CategoryId};
 pub use color::Rgb;
-pub use geometry::Rect;
+pub use geometry::{OutputGeom, Rect};
 pub use note::{ChecklistItem, Content, Font, Mode, Note};
 
 /// Current time at second precision, so timestamps in note files stay readable.

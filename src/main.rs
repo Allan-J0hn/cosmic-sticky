@@ -14,6 +14,7 @@ fn main() -> cosmic::iced::Result {
 }
 
 fn init_logging() {
+    use std::io::IsTerminal;
     use tracing_subscriber::EnvFilter;
 
     let filter = EnvFilter::try_from_default_env()
@@ -21,5 +22,6 @@ fn init_logging() {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
+        .with_ansi(std::io::stderr().is_terminal())
         .init();
 }

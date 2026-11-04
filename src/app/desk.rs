@@ -11,7 +11,7 @@ use cosmic::iced::platform_specific::shell::commands::layer_surface::{
 };
 use cosmic::iced::{Limits, Point, Rectangle, Size};
 
-use cosmic_sticky::model::geometry::{Rect, input_region};
+use cosmic_sticky::model::geometry::{OutputGeom, Rect, input_region};
 
 const NAMESPACE: &str = "cosmic-sticky";
 const MAX_SURFACE_EDGE: f32 = 16384.0;
@@ -19,16 +19,14 @@ const MAX_SURFACE_EDGE: f32 = 16384.0;
 /// Transparent layer surface covering one output; every note on that output is drawn inside it.
 pub struct Desk {
     pub surface: SurfaceId,
-    pub output_name: String,
-    pub size: (f32, f32),
+    pub geom: OutputGeom,
 }
 
 impl Desk {
-    pub fn new(output_name: String, size: (f32, f32)) -> Self {
+    pub fn new(geom: OutputGeom) -> Self {
         Self {
             surface: SurfaceId::unique(),
-            output_name,
-            size,
+            geom,
         }
     }
 
@@ -66,7 +64,7 @@ impl Desk {
     }
 
     fn zone(&self, notes: impl IntoIterator<Item = Rect>) -> Vec<Rectangle> {
-        input_region(notes, self.size)
+        input_region(notes, self.geom.size)
             .into_iter()
             .map(|r| Rectangle::new(Point::new(r.x, r.y), Size::new(r.width, r.height)))
             .collect()
