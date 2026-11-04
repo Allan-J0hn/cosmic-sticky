@@ -201,6 +201,9 @@ cross-output move on release; clamp on output resize.
   With a note focused, the blinking caret cost 3–4 ticks per 20 s, and it kept going after a click
   on bare desktop because focus stays on our surface. Editors now unfocus after 30 s without input:
   0 ticks per 20 s afterwards (`tools/e2e/focus-cpu.sh`).
+  Timers are cancelled when re-armed: one timer per keystroke caused an 18-tick burst 30 s
+  after typing, because every message redraws both desk surfaces. Now it's ≤1 tick
+  (`tools/e2e/idle-cpu.sh`). Clean regression run of `m3.sh`: all checks pass.
 
 **M3 notes**
 - Display clamping is non-destructive. A note whose output shrank or vanished is shown clamped

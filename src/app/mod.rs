@@ -12,6 +12,7 @@ use cosmic::cctk::sctk::reexports::client::protocol::wl_output::WlOutput;
 use cosmic::iced::core::window::Id as SurfaceId;
 use cosmic::iced::event::wayland::{Event as WaylandEvent, OutputEvent};
 use cosmic::iced::event::{self, Event, PlatformSpecific};
+use cosmic::iced::task::Handle as TaskHandle;
 use cosmic::iced::widget::{pin, stack, text_editor};
 use cosmic::iced::{Color, Length, Point, Subscription, keyboard, mouse, window};
 use cosmic::{Element, executor, widget};
@@ -35,6 +36,7 @@ struct NoteState {
     body: text_editor::Content,
     edits: u64,
     saved_edits: u64,
+    save_timer: Option<TaskHandle>,
 }
 
 impl NoteState {
@@ -49,6 +51,7 @@ impl NoteState {
             note,
             edits: 0,
             saved_edits: 0,
+            save_timer: None,
         }
     }
 
@@ -70,6 +73,7 @@ pub struct App {
     /// The editor last clicked, re-focused after a raise reorders the widget tree.
     editing: Option<(Uuid, Field)>,
     editor_activity: u64,
+    idle_timer: Option<TaskHandle>,
 }
 
 #[derive(Debug, Clone)]
@@ -191,11 +195,9 @@ impl App {
         };
         n.note.modified = model::now();
         n.edits += 1;
-        let edits = n.edits;
-        cosmic::task::future(async move {
-            tokio::time::sleep(AUTOSAVE_DELAY).await;
-            Message::SaveDue(id, edits)
-        })
+        let (task, handle) = timer(AUTOSAVE_DELAY, Message::SaveDue(id, n.edits));
+        n.save_timer = Some(handle);
+        task
     }
 
     fn save(&mut self, id: Uuid) {
@@ -270,11 +272,12 @@ impl App {
 
     fn arm_idle_unfocus(&mut self) -> Task<Message> {
         self.editor_activity += 1;
-        let activity = self.editor_activity;
-        cosmic::task::future(async move {
-            tokio::time::sleep(IDLE_UNFOCUS_DELAY).await;
-            Message::IdleUnfocus(activity)
-        })
+        let (task, handle) = timer(
+            IDLE_UNFOCUS_DELAY,
+            Message::IdleUnfocus(self.editor_activity),
+        );
+        self.idle_timer = Some(handle);
+        task
     }
 
     fn refocus(&self) -> Task<Message> {
@@ -347,6 +350,17 @@ fn output_geom(info: &cosmic::cctk::sctk::output::OutputInfo) -> OutputGeom {
     }
 }
 
+/// A one-shot timer. Dropping the handle cancels it, so re-arming doesn't pile up wakeups,
+/// each of which would rebuild and redraw every desk surface.
+fn timer(delay: Duration, message: Message) -> (Task<Message>, TaskHandle) {
+    let (task, handle) = cosmic::task::future(async move {
+        tokio::time::sleep(delay).await;
+        message
+    })
+    .abortable();
+    (task, handle.abort_on_drop())
+}
+
 fn single_line(text: &str) -> String {
     text.replace(['\r', '\n'], " ")
 }
@@ -402,6 +416,7 @@ impl cosmic::Application for App {
             hovered: None,
             editing: None,
             editor_activity: 0,
+            idle_timer: None,
         };
         (app, Task::none())
     }
