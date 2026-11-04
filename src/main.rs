@@ -2,7 +2,6 @@
 
 mod app;
 mod i18n;
-mod model;
 
 fn main() -> cosmic::iced::Result {
     init_logging();

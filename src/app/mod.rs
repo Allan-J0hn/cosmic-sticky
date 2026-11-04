@@ -14,7 +14,7 @@ use cosmic::iced::widget::pin;
 use cosmic::iced::{Color, Length, Subscription, mouse};
 use cosmic::{Element, executor, widget};
 
-use crate::model::geometry::Rect;
+use cosmic_sticky::model::geometry::Rect;
 use desk::Desk;
 
 const DEMO_NOTE: Rect = Rect::new(96.0, 96.0, 280.0, 200.0);

@@ -11,7 +11,7 @@ use cosmic::iced::platform_specific::shell::commands::layer_surface::{
 };
 use cosmic::iced::{Limits, Point, Rectangle, Size};
 
-use crate::model::geometry::{Rect, input_region};
+use cosmic_sticky::model::geometry::{Rect, input_region};
 
 const NAMESPACE: &str = "cosmic-sticky";
 const MAX_SURFACE_EDGE: f32 = 16384.0;

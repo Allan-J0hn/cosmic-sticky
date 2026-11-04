@@ -10,14 +10,21 @@ repository = "https://github.com/Allan-J0hn/cosmic-sticky"
 [dependencies]
 i18n-embed = { version = "0.16", features = ["fluent-system", "desktop-requester"] }
 i18n-embed-fl = "0.10"
+jiff = { version = "0.2", features = ["serde"] }
 rust-embed = "8"
+serde = { version = "1", features = ["derive"] }
+serde-saphyr = { version = "2.1", default-features = false, features = ["serialize", "deserialize"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic"
 default-features = false
 features = ["winit", "wayland", "tokio", "multi-window"]
+
+[dev-dependencies]
+tempfile = "3"
 
 [profile.release]
 lto = "thin"

@@ -77,7 +77,7 @@ which frees that memory.
 **Recommendation: one Markdown file per note with YAML frontmatter.** Reasons: it's readable and
 editable in any editor or phone app via Syncthing, checklists map naturally to Markdown task
 lists, and diffs and conflict files are human-readable. Cost: **one new crate** for YAML
-(`serde_yaml` is deprecated; candidate: `serde_norway`, a maintained fork). Alternative: JSON,
+(`serde_yaml` is deprecated; chosen in M2: `serde-saphyr`, see M2 storage details). Alternative: JSON,
 with zero new crates because `serde_json` is already in libcosmic's tree. It is safer to parse
 but unpleasant to hand-edit, since the body is an escaped string.
 
@@ -176,9 +176,12 @@ from a hard-coded demo note.
 - [x] Unplugging and replugging HDMI removes and recreates its surface without a crash (log). *2026-11-04: plug-in, unplug and replug of HDMI-A-1 each logged once; the app stayed up.*
 
 ### M2 — Domain model and storage (no UI)
-- [ ] Unit tests: frontmatter round trip (including unicode, empty body, CRLF); checklist and text conversion; hex colors; WCAG contrast picks the more readable of black/white for at least 20 colors (including mid-greys at the threshold); category CRUD; cannot delete the last category; reassign-on-delete moves every note.
-- [ ] Atomic write tests: target never partially written (simulated failure before rename), temp files cleaned up, a corrupt file is moved to `corrupt/` and never deleted.
-- [ ] Trash: move, restore, purge only items older than 7 days (injected clock).
+- [x] Unit tests: frontmatter round trip (including unicode, empty body, CRLF); checklist and text conversion; hex colors; WCAG contrast picks the more readable of black/white for at least 20 colors (including mid-greys at the threshold); category CRUD; cannot delete the last category; reassign-on-delete moves every note.
+  *Done:* 28 colors with fixed expectations, including #747474/#757575 → white and #767676/#777777 → black (the threshold is between #75 and #76), plus a sweep checking that the chosen color always wins and reaches ≥ 4.5:1.
+- [x] Atomic write tests: target never partially written (simulated failure before rename), temp files cleaned up, a corrupt file is moved to `corrupt/` and never deleted.
+  *Done:* also covers a stale `.tmp` from a crash, repeated quarantines of the same name (`bad.md`, `bad.1.md`, …), and corrupt `categories.yaml`.
+- [x] Trash: move, restore, purge only items older than 7 days (injected clock).
+  *Done:* exactly 7 days is purged and 6 d 23 h is kept. Restore refuses to overwrite a note that reappeared. Purge reports the next expiry for the single timer.
 
 ### M3 — Editable, movable, persistent notes
 Load and render notes from storage; edit title and body; debounced autosave; drag the header;
@@ -250,6 +253,27 @@ recreates the desk surfaces, and the state persists in `settings.yaml`.
    must always be undone (Escape, click elsewhere, timeout), or it would lock the keyboard.
 10. **Build environment:** the project path contains a space; avoid tools that split pkg-config
     flags on whitespace.
+
+### M2 storage details (decided while implementing)
+- **YAML crate: `serde-saphyr` 2.1** (MIT/Apache-2.0, actively maintained, panic-free parser, built on
+  `granit-parser`). It is used with only its `serialize` and `deserialize` features. `serde_norway`
+  and `serde_yaml_ng` haven't been updated since 2024.
+- **The file name is the note's identity.** `<uuid>.md` is authoritative and the frontmatter `id`
+  is informational, so a copied file can't create a duplicate id. A `*.md` whose name isn't a
+  uuid is quarantined to `corrupt/` rather than guessed at.
+- **Hand-written notes:** every frontmatter field is optional. Missing geometry defaults to
+  260×240 at (0,0) and missing timestamps come from the file's mtime. Unknown fields are ignored
+  (they are dropped on the next save).
+- **Checklist parsing:** `-`, `*` or `+` followed by `[ ]`, `[x]` or `[X]`. Other non-blank
+  lines become unchecked items, and blank lines are dropped when text becomes a checklist.
+  Checklist → text → checklist is exact.
+- **Categories:** ids `self-care`, `reminders` and `todos` for the defaults, uuids for new ones.
+  The `checklist: true` flag (only on To-do's by default) is what makes new notes start as
+  checklists, so it survives renaming. Names are unique, case-insensitively, because
+  `--category NAME` looks them up by name. A note with an unknown category id displays the first
+  category's color and keeps its id.
+- The serializer quotes timestamps and the key `"y"` (YAML 1.1 boolean safety). The output is
+  still valid YAML.
 
 ## 6. Deviations / additions vs SPEC (accepted)
 - Layer is **Bottom**, not Background (Background gets no pointer input here).
