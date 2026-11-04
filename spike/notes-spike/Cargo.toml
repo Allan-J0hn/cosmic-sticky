@@ -1,0 +1,17 @@
+[package]
+name = "notes-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+gpu = ["libcosmic/wgpu"]
+
+[dependencies]
+libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false, features = [
+    "winit",
+    "wayland",
+    "tokio",
+    "multi-window",
+] }
