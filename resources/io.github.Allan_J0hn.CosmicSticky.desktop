@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Sticky Notes
+Comment=Sticky notes pinned to the desktop
+Icon=io.github.Allan_J0hn.CosmicSticky
+Exec=cosmic-sticky
+Terminal=false
+StartupNotify=false
+Categories=Utility;COSMIC;
+Keywords=notes;sticky;memo;todo;COSMIC;

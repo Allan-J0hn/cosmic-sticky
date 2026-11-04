@@ -170,10 +170,10 @@ From cosmic-app-template: pinned toolchain and lockfile, justfile (`build-debug`
 `build-release`, `run`, `check`, `test`, `install`, `uninstall`), no main window, one Bottom
 desk surface per output (created and destroyed on output add/remove), blur off, input region
 from a hard-coded demo note.
-- [ ] Release build: a screenshot shows the demo note on each output. A maximized window hides it (screenshot).
-- [ ] Clicks on bare desktop are not delivered (log), and clicks on the note are.
-- [ ] Idle CPU 0 ticks over 60 s (release). RSS recorded and below 100 MB with 2 outputs.
-- [ ] Unplugging and replugging HDMI removes and recreates its surface without a crash (log). *Eye check: you unplug.*
+- [x] Release build: a screenshot shows the demo note on each output. A maximized window hides it (screenshot). *2026-11-04: shown on eDP-1, hidden behind the maximized terminal on HDMI-A-1.*
+- [x] Clicks on bare desktop are not delivered (log), and clicks on the note are. *0 presses for a desktop click, 1 for a note click.*
+- [x] Idle CPU 0 ticks over 60 s (release). RSS recorded and below 100 MB with 2 outputs. *4 ticks/60 s (~0.07%), 58 MB.*
+- [ ] Unplugging and replugging HDMI removes and recreates its surface without a crash (log). *Eye check: you unplug. Pending.*
 
 ### M2 — Domain model and storage (no UI)
 - [ ] Unit tests: frontmatter round trip (including unicode, empty body, CRLF); checklist and text conversion; hex colors; WCAG contrast picks the more readable of black/white for at least 20 colors (including mid-greys at the threshold); category CRUD; cannot delete the last category; reassign-on-delete moves every note.

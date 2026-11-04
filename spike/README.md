@@ -66,3 +66,6 @@ Source (cosmic-comp `state.rs`): layer-shell global is filtered with
   modifier state. Irrelevant to the findings.
 - Per-note drag fix attempts (grab-point formula + 20 ms / 300 ms throttle, forced redraw on
   move) did not help: the margin is applied hundreds of ms late.
+- Input injection pitfalls (found during M1): cosmic-comp ignores a relative motion whose target
+  lies outside every output, so cross-output moves need small steps; absolute coordinates map to
+  the output under the cursor; the kernel drops an absolute event identical to the previous one.

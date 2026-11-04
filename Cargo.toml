@@ -1,0 +1,23 @@
+[package]
+name = "cosmic-sticky"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+license = "GPL-3.0-only"
+description = "Sticky notes pinned to the COSMIC desktop"
+repository = "https://github.com/Allan-J0hn/cosmic-sticky"
+
+[dependencies]
+i18n-embed = { version = "0.16", features = ["fluent-system", "desktop-requester"] }
+i18n-embed-fl = "0.10"
+rust-embed = "8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
+
+[dependencies.libcosmic]
+git = "https://github.com/pop-os/libcosmic"
+default-features = false
+features = ["winit", "wayland", "tokio", "multi-window"]
+
+[profile.release]
+lto = "thin"
