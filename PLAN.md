@@ -198,7 +198,9 @@ cross-output move on release; clamp on output resize.
   *Done:* the file showed `output: HDMI-A-1` at (532,240). After the restart, the app reported the pointer over that note on HDMI-A-1.
 - [x] Idle CPU 0 after editing stops. CPU while dragging recorded (release).
   *Done:* 0 ticks in 30 s after Escape, RSS 59 MB. Dragging for 2.7 s used 41 ticks (~15% of one core).
-  Open: idle CPU while a note keeps keyboard focus (caret blink after clicking bare desktop) is not yet measured.
+  With a note focused, the blinking caret cost 3–4 ticks per 20 s, and it kept going after a click
+  on bare desktop because focus stays on our surface. Editors now unfocus after 30 s without input:
+  0 ticks per 20 s afterwards (`tools/e2e/focus-cpu.sh`).
 
 **M3 notes**
 - Display clamping is non-destructive. A note whose output shrank or vanished is shown clamped

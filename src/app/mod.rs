@@ -25,6 +25,9 @@ use drag::{Drag, DragKind};
 use note_view::{Field, NoteColors, NoteParts};
 
 const AUTOSAVE_DELAY: Duration = Duration::from_millis(500);
+/// Editors are unfocused after this long without input: keyboard focus stays on our surface
+/// after a click on bare desktop, and the blinking caret would keep redrawing.
+const IDLE_UNFOCUS_DELAY: Duration = Duration::from_secs(30);
 
 struct NoteState {
     note: Note,
@@ -66,6 +69,7 @@ pub struct App {
     hovered: Option<Uuid>,
     /// The editor last clicked, re-focused after a raise reorders the widget tree.
     editing: Option<(Uuid, Field)>,
+    editor_activity: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -82,6 +86,7 @@ pub enum Message {
     Body(Uuid, text_editor::Action),
     FocusBody(Uuid),
     SaveDue(Uuid, u64),
+    IdleUnfocus(u64),
 }
 
 impl App {
@@ -255,6 +260,23 @@ impl App {
         }
     }
 
+    fn unfocus_editors(&mut self) -> Task<Message> {
+        self.editing = None;
+        self.save_dirty();
+        cosmic::iced::runtime::task::effect(cosmic::iced::runtime::Action::widget(
+            cosmic::iced::core::widget::operation::focusable::unfocus(),
+        ))
+    }
+
+    fn arm_idle_unfocus(&mut self) -> Task<Message> {
+        self.editor_activity += 1;
+        let activity = self.editor_activity;
+        cosmic::task::future(async move {
+            tokio::time::sleep(IDLE_UNFOCUS_DELAY).await;
+            Message::IdleUnfocus(activity)
+        })
+    }
+
     fn refocus(&self) -> Task<Message> {
         match self.editing {
             Some((id, field)) => {
@@ -379,6 +401,7 @@ impl cosmic::Application for App {
             drag: None,
             hovered: None,
             editing: None,
+            editor_activity: 0,
         };
         (app, Task::none())
     }
@@ -418,6 +441,29 @@ impl cosmic::Application for App {
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
+        let editor_input = matches!(
+            message,
+            Message::Title(..) | Message::Body(..) | Message::FocusBody(_)
+        );
+        let task = self.handle(message);
+        if editor_input {
+            Task::batch([task, self.arm_idle_unfocus()])
+        } else {
+            task
+        }
+    }
+
+    fn view(&self) -> Element<'_, Message> {
+        widget::space().into()
+    }
+
+    fn view_window(&self, surface: SurfaceId) -> Element<'_, Message> {
+        self.desk_view(surface)
+    }
+}
+
+impl App {
+    fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Output(event, output) => self.on_output(*event, output),
             Message::CursorMoved(surface, position) => {
@@ -441,12 +487,13 @@ impl cosmic::Application for App {
             }
             Message::PointerPressed(surface) => self.raise_at(surface),
             Message::PointerReleased => self.finish_drag(),
-            Message::Escape => {
-                self.editing = None;
-                self.save_dirty();
-                cosmic::iced::runtime::task::effect(cosmic::iced::runtime::Action::widget(
-                    cosmic::iced::core::widget::operation::focusable::unfocus(),
-                ))
+            Message::Escape => self.unfocus_editors(),
+            Message::IdleUnfocus(activity) => {
+                if activity == self.editor_activity && self.editing.is_some() {
+                    tracing::debug!("unfocusing idle editor");
+                    return self.unfocus_editors();
+                }
+                Task::none()
             }
             Message::Focused(surface, focused) => {
                 if let Some(desk) = self.desk_for_surface(surface) {
@@ -516,11 +563,7 @@ impl cosmic::Application for App {
         }
     }
 
-    fn view(&self) -> Element<'_, Message> {
-        widget::space().into()
-    }
-
-    fn view_window(&self, surface: SurfaceId) -> Element<'_, Message> {
+    fn desk_view(&self, surface: SurfaceId) -> Element<'_, Message> {
         let Some(desk) = self.desk_for_surface(surface) else {
             return widget::space().into();
         };

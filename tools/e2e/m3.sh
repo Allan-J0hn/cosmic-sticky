@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 OUT=$PWD/out/m3; rm -rf "$OUT"; mkdir -p "$OUT"
 LOG=$OUT/app.log
 source ./lib.sh
-BIN=$ROOT/target/release/cosmic-sticky
+BIN=${BIN:-$ROOT/target/release/cosmic-sticky}
 export XDG_DATA_HOME=$OUT/data
 NOTES=$XDG_DATA_HOME/cosmic-sticky/notes
 mkdir -p "$NOTES"
