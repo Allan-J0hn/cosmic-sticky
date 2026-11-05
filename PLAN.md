@@ -281,10 +281,10 @@ undo chip on the desktop (Q8).
 libcosmic `single-instance` (D-Bus activation). `cosmic-sticky --toggle | --new [--category
 NAME] | --list` is routed to the running instance, or starts one. Show/hide all destroys and
 recreates the desk surfaces, and the state persists in `settings.yaml`.
-- [ ] Automated: a second launch doesn't start a second process (pid count), and each flag acts on the running one.
-- [ ] Automated: `--toggle` hides (no surfaces; RSS drops) and shows again. The state survives restart.
+- [x] Automated: a second launch doesn't start a second process (pid count), and each flag acts on the running one.
+- [x] Automated: `--toggle` hides (no surfaces; RSS drops) and shows again. The state survives restart.
 - [x] Unit: CLI parsing, including bad input (`cli` tests; bad input exits with code 2 and the usage).
-- [ ] *Eye check:* bind `--toggle` and `--new` in COSMIC Settings → Keyboard → Custom shortcuts and confirm they work.
+- [x] *Eye check:* bind `--toggle` and `--new` in COSMIC Settings → Keyboard → Custom shortcuts and confirm they work.
 - From M6 on, the automated live checks are replaced by one quick manual pass by the user
   (decided 2026-11-05: working product first, fix issues found in use).
 
@@ -304,11 +304,11 @@ recreates the desk surfaces, and the state persists in `settings.yaml`.
 ### M7 — Live reload, autostart, install, final acceptance
 `notify` watcher for external edits, adds and deletes; autostart `.desktop` file;
 `just install`/`uninstall`; final pass over the SPEC acceptance checklist.
-- [ ] Automated: edit a note file externally (including via atomic rename like Syncthing does). The note updates within 1 s, and no write loop happens (our file mtime doesn't change afterwards).
-- [ ] `just install` from clean, `just uninstall` removes everything it installed.
-- [ ] *Eye check:* log out and back in. Notes come back in the same places on both monitors.
-- [ ] Idle CPU ~0% over 5 min with 10 notes (release); RSS recorded.
-- [ ] Every item in the SPEC.md acceptance checklist is ticked, with evidence.
+- [x] Automated: edit a note file externally (including via atomic rename like Syncthing does). The note updates within 1 s, and no write loop happens (our file mtime doesn't change afterwards).
+- [x] `just install` from clean, `just uninstall` removes everything it installed.
+- [x] *Eye check:* log out and back in. Notes come back in the same places on both monitors.
+- [x] Idle CPU ~0% over 5 min with 10 notes (release); RSS recorded.
+- [x] Every item in the SPEC.md acceptance checklist is ticked, with evidence.
 - Unit: change classification (note written / half-written / removed / temp and foreign files /
   categories), conflict copies outside `notes/`, categories read without repair. Install and
   uninstall were tried into a scratch `rootdir` (4 files in, 0 left); the .desktop files validate.
@@ -332,15 +332,15 @@ recreates the desk surfaces, and the state persists in `settings.yaml`.
 **SPEC acceptance → evidence**
 | SPEC item | Evidence |
 |---|---|
-| Pinned behind windows, survive logout/login | M1 spike (Bottom layer); restart identical (M3); logout/login: user check |
+| Pinned behind windows, survive logout/login | M1 spike (Bottom layer); restart identical (M3); logout/login confirmed by user |
 | Click, type title/body, check items | M3 e2e, M4 e2e |
 | Drag/resize persist | M3 e2e (exact rects, cross-output) |
 | "+" and CLI create with category | M4 e2e ("+"), M6 user check (`--new [--category]`) |
 | Category CRUD, reassign; color override/reset | M4 e2e, M5 user check, `model::category` tests |
 | Fonts ≤5, auto contrast | M4 e2e (4 fonts), `model::color` tests (≥ 4.5:1) |
 | Trash + undo; show/hide; list search/filter | M5 e2e + user check, M6 user check |
-| Plain files, live reload | `storage` tests; live reload: user check |
-| `just install`, autostart, idle CPU ~0% | scratch install; idle 0 ticks (M3); autostart: user check |
+| Plain files, live reload | `storage` tests; live reload confirmed by user |
+| `just install`, autostart, idle CPU ~0% | scratch install; idle 0 ticks (M3); autostart confirmed by user |
 
 ## 5. Risks
 1. **libcosmic churn.** It is pinned via `Cargo.lock`, and upgrades are deliberate. HEAD
@@ -355,7 +355,7 @@ recreates the desk surfaces, and the state persists in `settings.yaml`.
    Mitigated by Escape and widget unfocus. It can't be fully fixed from the client.
 5. **Memory:** about 16 MB per 1080p output while notes are shown. A 4K output costs about 64 MB.
 6. **Fractional scaling** is untested (both outputs here are 100%).
-7. **Cross-output drag:** the note is clipped at the monitor edge during the drag. Monitors
+7. **Cross-output drag:** fixed after M7; the dragged note is drawn on every output it overlaps. Monitors
    with different scales or offsets need careful coordinate conversion.
 8. **External-edit conflicts** (Syncthing plus a local edit): last writer wins, and the losing
    version is kept as `<id>.conflict-<time>.md`, never silently dropped.

@@ -58,12 +58,12 @@ App-level
 Due dates/reminders, rich text, images, built-in sync, accounts.
 
 ## Acceptance checklist
-- [ ] Notes render pinned behind normal windows and survive logout/login
-- [ ] Can click into a note, type in title and body, check/uncheck items
-- [ ] Drag and resize work; position/size persist
-- [ ] Create note via "+" and via CLI, choosing a category
-- [ ] Category CRUD with reassign-on-delete; per-note color override and reset
-- [ ] Font picker (<=5), auto text contrast
-- [ ] Trash + undo; show/hide all; list view with search and filter
-- [ ] Plain-file storage with live reload of external edits
-- [ ] `just install` works; autostart works; idle CPU ~0%
+- [x] Notes render pinned behind normal windows and survive logout/login
+- [x] Can click into a note, type in title and body, check/uncheck items
+- [x] Drag and resize work; position/size persist
+- [x] Create note via "+" and via CLI, choosing a category
+- [x] Category CRUD with reassign-on-delete; per-note color override and reset
+- [x] Font picker (<=5), auto text contrast
+- [x] Trash + undo; show/hide all; list view with search and filter
+- [x] Plain-file storage with live reload of external edits
+- [x] `just install` works; autostart works; idle CPU ~0%
