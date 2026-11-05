@@ -309,6 +309,38 @@ recreates the desk surfaces, and the state persists in `settings.yaml`.
 - [ ] *Eye check:* log out and back in. Notes come back in the same places on both monitors.
 - [ ] Idle CPU ~0% over 5 min with 10 notes (release); RSS recorded.
 - [ ] Every item in the SPEC.md acceptance checklist is ticked, with evidence.
+- Unit: change classification (note written / half-written / removed / temp and foreign files /
+  categories), conflict copies outside `notes/`, categories read without repair. Install and
+  uninstall were tried into a scratch `rootdir` (4 files in, 0 left); the .desktop files validate.
+  The live items above are left for the user's one quick pass (decided 2026-11-05).
+
+**M7 notes**
+- The watcher covers `notes/` and the data dir itself (for `categories.yaml`), non-recursively.
+  Access and metadata events are ignored, so our own reads cause nothing.
+- Our own writes are recognised by comparing the file text with what we last wrote or read;
+  a version equal to the note in memory is also ignored (restores, touch). Unchanged notes are
+  not rewritten.
+- A file that doesn't parse yet (an editor writing in place) is skipped until a later event;
+  the watcher never quarantines.
+- Deviation from Risk 8: conflict copies go to `conflicts/<id>.conflict-<time>.md`, not next to
+  the note, because a second file in `notes/` would load (or be quarantined) as a note.
+- A note removed externally disappears from the desktop; an unknown note file appears.
+- `just install` builds first, writes absolute `Exec=` paths, and adds
+  `~/.config/autostart/io.github.Allan_J0hn.CosmicSticky.desktop`. The app-grid entry runs
+  `--list`, so launching it while running opens the list. No metainfo.xml (nothing local uses it).
+
+**SPEC acceptance → evidence**
+| SPEC item | Evidence |
+|---|---|
+| Pinned behind windows, survive logout/login | M1 spike (Bottom layer); restart identical (M3); logout/login: user check |
+| Click, type title/body, check items | M3 e2e, M4 e2e |
+| Drag/resize persist | M3 e2e (exact rects, cross-output) |
+| "+" and CLI create with category | M4 e2e ("+"), M6 user check (`--new [--category]`) |
+| Category CRUD, reassign; color override/reset | M4 e2e, M5 user check, `model::category` tests |
+| Fonts ≤5, auto contrast | M4 e2e (4 fonts), `model::color` tests (≥ 4.5:1) |
+| Trash + undo; show/hide; list search/filter | M5 e2e + user check, M6 user check |
+| Plain files, live reload | `storage` tests; live reload: user check |
+| `just install`, autostart, idle CPU ~0% | scratch install; idle 0 ticks (M3); autostart: user check |
 
 ## 5. Risks
 1. **libcosmic churn.** It is pinned via `Cargo.lock`, and upgrades are deliberate. HEAD

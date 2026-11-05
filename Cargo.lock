@@ -995,6 +995,7 @@ dependencies = [
  "i18n-embed-fl",
  "jiff",
  "libcosmic",
+ "notify",
  "rust-embed",
  "serde",
  "serde-saphyr",

@@ -3,6 +3,7 @@
 pub mod format;
 pub mod fs;
 pub mod trash;
+pub mod watch;
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -13,6 +14,7 @@ use uuid::Uuid;
 use crate::model::{Categories, Note};
 pub use format::{FormatError, Settings};
 pub use trash::{Purge, TRASH_RETENTION, TrashedNote};
+pub use watch::Change;
 
 const APP_DIR: &str = "cosmic-sticky";
 

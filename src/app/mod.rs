@@ -9,6 +9,7 @@ mod list_window;
 mod note_view;
 mod pickers;
 mod reveal;
+mod watch;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -49,6 +50,10 @@ struct NoteState {
     edits: u64,
     saved_edits: u64,
     save_timer: Option<TaskHandle>,
+    /// The file's text as last written or read, to tell our own writes from external ones.
+    written: String,
+    /// An external version that arrived while the note was being edited.
+    pending: Option<Note>,
 }
 
 impl NoteState {
@@ -62,6 +67,8 @@ impl NoteState {
             edits: 0,
             saved_edits: 0,
             save_timer: None,
+            written: String::new(),
+            pending: None,
         };
         state.sync_editors();
         state
@@ -166,6 +173,7 @@ pub enum Message {
     WindowResized(SurfaceId, Size),
     CloseRequested(SurfaceId),
     WindowClosed(SurfaceId),
+    FileChanged(std::path::PathBuf),
 }
 
 impl App {
@@ -298,9 +306,19 @@ impl App {
         let Some(n) = self.note_mut(id) else {
             return;
         };
-        match store.save_note(&n.note) {
+        let text = match Store::note_text(&n.note) {
+            Ok(text) => text,
+            Err(e) => return tracing::error!("serializing note {id}: {e}"),
+        };
+        if text == n.written {
+            n.saved_edits = n.edits;
+            return;
+        }
+        Self::keep_conflict(&store, n.pending.take());
+        match store.write_note_text(id, &text) {
             Ok(()) => {
                 n.saved_edits = n.edits;
+                n.written = text;
                 tracing::debug!(note = %id, "saved");
             }
             Err(e) => tracing::error!("saving note {id}: {e}"),
@@ -570,7 +588,11 @@ impl cosmic::Application for App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        event::listen_with(|event, _status, surface| match event {
+        let files = match &self.store {
+            Some(store) => watch::subscription(store.root().to_path_buf()),
+            None => Subscription::none(),
+        };
+        let events = event::listen_with(|event, _status, surface| match event {
             Event::PlatformSpecific(PlatformSpecific::Wayland(WaylandEvent::Output(e, o))) => {
                 Some(Message::Output(Box::new(e), o))
             }
@@ -599,7 +621,8 @@ impl cosmic::Application for App {
             Event::Window(window::Event::Focused) => Some(Message::Focused(surface, true)),
             Event::Window(window::Event::Unfocused) => Some(Message::Focused(surface, false)),
             _ => None,
-        })
+        });
+        Subscription::batch([events, files])
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -612,6 +635,7 @@ impl cosmic::Application for App {
                 | Message::RemoveItem(..)
         );
         let task = self.handle(message);
+        let task = Task::batch([task, self.apply_pending()]);
         if editor_input {
             Task::batch([task, self.arm_idle_unfocus(), self.extend_reveal()])
         } else {
@@ -773,6 +797,7 @@ impl App {
                 }
                 Task::none()
             }
+            Message::FileChanged(path) => self.on_file_changed(path),
             Message::WindowClosed(surface) => {
                 if self.list.as_ref().is_some_and(|l| l.id == surface) {
                     tracing::info!("list window closed");
