@@ -58,3 +58,12 @@ abort() { echo "ABORT: $1"; exit 1; }
 cpu_ticks() { awk '{print $14+$15}' "/proc/$1/stat"; }
 
 shot() { CROP=$CROP "$WLSHOT" "$OUT" "$1-" >/dev/null; }
+
+# pixel X Y OUTPUT: color at (X, Y) on OUTPUT as #rrggbb
+pixel() { PIXEL=$1,$2 "$WLSHOT" "$OUT" | awk -v o="$3" '$1 == o {print $2}'; }
+
+# expect LABEL ACTUAL EXPECTED
+expect() {
+  if [ "$2" = "$3" ]; then echo "   PASS $1: $2"; else echo "   FAIL $1: got '$2', expected '$3'"; FAILS=$((FAILS+1)); fi
+}
+FAILS=0

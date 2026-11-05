@@ -220,11 +220,32 @@ cross-output move on release; clamp on output resize.
 Category picker; color override with "reset to category color"; font picker (at most 5,
 including handwriting); checklist mode (toggle, add/remove items, check/uncheck); the "+"
 button creates a note with a category choice; new "To-do's" notes start as checklists.
-- [ ] Automated: change category, then the color follows the category. Override, then the color sticks while the category changes. Reset returns to the category color. File fields checked each time.
-- [ ] Automated: toggle checklist, check and uncheck items, and confirm the file's task list.
-- [ ] Automated: "+" → choose "To-do's" → new note file in checklist mode next to the parent note.
-- [ ] Unit: auto text color on every default category color plus random colors.
-- [ ] *Eye check:* each of the 5 fonts renders and the handwriting font looks right.
+- [x] Automated: change category, then the color follows the category. Override, then the color sticks while the category changes. Reset returns to the category color. File fields checked each time.
+  *Done* (`tools/e2e/m4.sh`): on-screen pixel checks plus file fields. Reminders #ffd54f → To-do's #90caf9 → override
+  #f48fb1, which is kept after switching to Self care → reset gives #a5d6a7.
+- [x] Automated: toggle checklist, check and uncheck items, and confirm the file's task list.
+  *Done:* the text "x" became `- [ ] x`. Add item, typing, Enter for a new item, and check/uncheck gave
+  `- [ ] x / - [x] milk / - [ ] eggs` in the file.
+- [x] Automated: "+" → choose "To-do's" → new note file in checklist mode next to the parent note.
+  *Done:* a new file at (476,200), 16 px right of the parent, with `category: todos` and `mode: checklist`; the
+  cursor lands in its title (typing "shopping" saved the title).
+- [x] Unit: auto text color on every default category color plus random colors.
+  *Done:* default categories, all 12 palette swatches and 5000 pseudo-random colors; the chosen text color always wins and reaches ≥ 4.5:1.
+- [x] *Eye check:* each of the 5 fonts renders and the handwriting font looks right.
+  *Done by screenshot* (4 fonts, per decision 5): Sans, Serif (Noto Serif), Mono and Handwriting (Shadows Into Light) are all distinct.
+  Please confirm by eye after `just run`.
+
+**M4 notes**
+- Pickers open as panels inside the note (in place of its content) instead of popups. No extra
+  surfaces are needed, and they work the same on every output.
+- Header controls are plain clickable areas colored with the note's contrast color; themed
+  buttons would ignore the note color. The icons come from the COSMIC icon theme (Cosmic → Pop → Adwaita).
+- `iced::font::load` is silently dropped while no window exists (this app starts with none), so
+  the bundled font is loaded straight into the renderer's global font system at startup.
+- text_editor key bindings are consulted for every editor, not just the focused one; custom
+  bindings (Enter, Backspace on an empty item) check focus first.
+- Choosing a category while creating a note sets its mode (To-do's → checklist) only while the
+  note is still blank; later category changes never convert content.
 
 ### M5 — Trash/undo, list view, category management
 List view window (normal xdg toplevel): search (title and body), category filter, click to

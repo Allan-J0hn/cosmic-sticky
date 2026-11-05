@@ -1,4 +1,5 @@
 //! Screenshot every output via ext-image-copy-capture-v1 (shm). Dev-only e2e helper.
+//! `PIXEL=x,y` prints the color at that point on each output instead.
 //! Usage: wlshot <out_dir> [prefix]   -> writes <out_dir>/<prefix><output-name>.png
 use std::fs::File;
 use std::io::BufWriter;
@@ -131,6 +132,17 @@ fn main() {
             for px in data.chunks_exact_mut(4) {
                 if matches!(fmt, wl_shm::Format::Xrgb8888 | wl_shm::Format::Argb8888) { px.swap(0, 2); }
                 px[3] = 255;
+            }
+            // optional PIXEL=x,y (output-local px): print "<output> #rrggbb" instead of saving
+            if let Ok(p) = std::env::var("PIXEL") {
+                let v: Vec<u32> = p.split(',').map(|x| x.parse().unwrap()).collect();
+                let i = ((v[1] * w + v[0]) * 4) as usize;
+                println!("{name} #{:02x}{:02x}{:02x}", data[i], data[i + 1], data[i + 2]);
+                fr.destroy();
+                sess.destroy();
+                buf.destroy();
+                pool.destroy();
+                continue;
             }
             // optional CROP=x,y,w,h (output-local px)
             let (mut w, mut h) = (w, h);

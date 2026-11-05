@@ -6,7 +6,7 @@ pub mod geometry;
 pub mod note;
 
 pub use category::{Categories, Category, CategoryError, CategoryId};
-pub use color::Rgb;
+pub use color::{PALETTE, Rgb};
 pub use geometry::{OutputGeom, Rect};
 pub use note::{ChecklistItem, Content, Font, Mode, Note};
 

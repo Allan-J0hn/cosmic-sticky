@@ -21,6 +21,22 @@ impl fmt::Display for ParseColorError {
 
 impl std::error::Error for ParseColorError {}
 
+/// Swatches offered by the color picker.
+pub const PALETTE: [Rgb; 12] = [
+    Rgb::new(0xff, 0xd5, 0x4f),
+    Rgb::new(0xff, 0xf5, 0x9d),
+    Rgb::new(0xff, 0xb7, 0x4d),
+    Rgb::new(0xff, 0x8a, 0x80),
+    Rgb::new(0xf4, 0x8f, 0xb1),
+    Rgb::new(0xce, 0x93, 0xd8),
+    Rgb::new(0x90, 0xca, 0xf9),
+    Rgb::new(0x80, 0xcb, 0xc4),
+    Rgb::new(0xa5, 0xd6, 0xa7),
+    Rgb::new(0xcf, 0xd8, 0xdc),
+    Rgb::new(0x45, 0x5a, 0x64),
+    Rgb::new(0x6a, 0x1b, 0x9a),
+];
+
 impl Rgb {
     pub const BLACK: Rgb = Rgb::new(0, 0, 0);
     pub const WHITE: Rgb = Rgb::new(255, 255, 255);
@@ -182,6 +198,37 @@ mod tests {
                 assert!(c.contrast_ratio(chosen) >= c.contrast_ratio(other), "{c}");
                 assert!(c.contrast_ratio(chosen) >= 4.5, "{c}");
             }
+        }
+    }
+
+    fn assert_readable(c: Rgb) {
+        let chosen = c.readable_text();
+        let other = if chosen == Rgb::BLACK {
+            Rgb::WHITE
+        } else {
+            Rgb::BLACK
+        };
+        assert!(c.contrast_ratio(chosen) >= c.contrast_ratio(other), "{c}");
+        assert!(c.contrast_ratio(chosen) >= 4.5, "{c}");
+    }
+
+    #[test]
+    fn readable_text_on_default_categories_palette_and_random_colors() {
+        for c in crate::model::Categories::default().iter() {
+            assert_readable(c.color);
+        }
+        for c in PALETTE {
+            assert_readable(c);
+        }
+        assert_eq!(PALETTE[10].readable_text(), Rgb::WHITE);
+        assert_eq!(PALETTE[0].readable_text(), Rgb::BLACK);
+        let mut seed: u32 = 0x2545_f491;
+        for _ in 0..5000 {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            let [r, g, b, _] = seed.to_le_bytes();
+            assert_readable(Rgb::new(r, g, b));
         }
     }
 

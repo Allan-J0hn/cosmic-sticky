@@ -1,3 +1,14 @@
 app-title = Sticky Notes
 title-placeholder = Title
 body-placeholder = Write something…
+item-placeholder = Item
+add-item = Add item
+category = Category
+new-note-category = New note in…
+color = Color
+use-category-color = Use category color
+font = Font
+font-sans = Sans
+font-serif = Serif
+font-mono = Monospace
+font-handwriting = Handwriting

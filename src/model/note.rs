@@ -186,6 +186,35 @@ impl Note {
         self.content.mode()
     }
 
+    pub fn is_blank(&self) -> bool {
+        self.title.trim().is_empty()
+            && match &self.content {
+                Content::Text(text) => text.trim().is_empty(),
+                Content::Checklist(items) => items.iter().all(|i| i.text.trim().is_empty()),
+            }
+    }
+
+    /// Category chosen while creating a note: a still-blank note also takes the category's
+    /// starting mode.
+    pub fn choose_initial_category(&mut self, category: &Category) {
+        self.category = category.id.clone();
+        if self.is_blank() {
+            let mode = if category.checklist {
+                Mode::Checklist
+            } else {
+                Mode::Text
+            };
+            self.content = Content::empty(mode);
+        }
+    }
+
+    pub fn items_mut(&mut self) -> Option<&mut Vec<ChecklistItem>> {
+        match &mut self.content {
+            Content::Checklist(items) => Some(items),
+            Content::Text(_) => None,
+        }
+    }
+
     pub fn set_mode(&mut self, mode: Mode) {
         self.content = std::mem::take(&mut self.content).into_mode(mode);
     }
@@ -325,6 +354,37 @@ mod tests {
         assert_eq!(n.text_color(&cats), Rgb::WHITE);
         n.color_override = None;
         assert_eq!(n.color(&cats), Rgb::new(0xff, 0xd5, 0x4f));
+    }
+
+    #[test]
+    fn initial_category_sets_mode_only_while_blank() {
+        let cats = Categories::default();
+        let todos = cats.get(&CategoryId("todos".into())).unwrap();
+        let mut n = sample(&cats, "reminders");
+        n.choose_initial_category(todos);
+        assert_eq!(
+            (n.category.0.as_str(), n.mode()),
+            ("todos", Mode::Checklist)
+        );
+
+        let mut n = sample(&cats, "reminders");
+        n.content = Content::Text("already typed".into());
+        n.choose_initial_category(todos);
+        assert_eq!(n.category, todos.id);
+        assert_eq!(n.content, Content::Text("already typed".into()));
+    }
+
+    #[test]
+    fn blank_notes() {
+        let cats = Categories::default();
+        let mut n = sample(&cats, "todos");
+        assert!(n.is_blank());
+        n.items_mut().unwrap().push(ChecklistItem::new(" ", false));
+        assert!(n.is_blank());
+        n.items_mut().unwrap().push(ChecklistItem::new("x", false));
+        assert!(!n.is_blank());
+        n.set_mode(Mode::Text);
+        assert!(n.items_mut().is_none());
     }
 
     #[test]

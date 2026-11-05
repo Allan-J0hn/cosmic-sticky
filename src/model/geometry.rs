@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 pub const MIN_NOTE_SIZE: (f32, f32) = (160.0, 120.0);
+pub const DEFAULT_NOTE_SIZE: (f32, f32) = (260.0, 240.0);
+const NEW_NOTE_GAP: f32 = 16.0;
 
 /// Axis-aligned rectangle in logical pixels, relative to an output's top-left corner.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -77,6 +79,22 @@ pub fn input_region(rects: impl IntoIterator<Item = Rect>, output_size: (f32, f3
         .into_iter()
         .filter_map(|r| r.intersection(&bounds))
         .collect()
+}
+
+/// Where a new note of `size` goes next to `parent`: to its right, else to its left, else
+/// offset over it; always fully on the output.
+pub fn beside(parent: Rect, size: (f32, f32), output_size: (f32, f32)) -> Rect {
+    let (w, h) = size;
+    let right = parent.right() + NEW_NOTE_GAP;
+    let left = parent.x - NEW_NOTE_GAP - w;
+    let (x, y) = if right + w <= output_size.0 {
+        (right, parent.y)
+    } else if left >= 0.0 {
+        (left, parent.y)
+    } else {
+        (parent.x + 24.0, parent.y + 24.0)
+    };
+    Rect::new(x, y, w, h).clamp_into(output_size).round()
 }
 
 /// A connected output in the global compositor space.
@@ -246,6 +264,26 @@ mod tests {
         let (to, r) = hand_off(rect, &outputs[0], (1950.0, 50.0), &outputs);
         assert_eq!(to.name, "eDP-1");
         assert_eq!(r, Rect::new(1660.0, 41.0, 260.0, 240.0));
+    }
+
+    #[test]
+    fn new_note_goes_right_then_left_then_offset() {
+        let size = DEFAULT_NOTE_SIZE;
+        let parent = Rect::new(100.0, 100.0, 260.0, 240.0);
+        assert_eq!(
+            beside(parent, size, OUTPUT),
+            Rect::new(376.0, 100.0, 260.0, 240.0)
+        );
+        let parent = Rect::new(1600.0, 100.0, 260.0, 240.0);
+        assert_eq!(
+            beside(parent, size, OUTPUT),
+            Rect::new(1324.0, 100.0, 260.0, 240.0)
+        );
+        let wide = Rect::new(100.0, 900.0, 1700.0, 240.0);
+        assert_eq!(
+            beside(wide, size, OUTPUT),
+            Rect::new(124.0, 840.0, 260.0, 240.0)
+        );
     }
 
     #[test]

@@ -8,8 +8,10 @@ use uuid::Uuid;
 
 use crate::model::{Categories, Category, CategoryId, Content, Font, Mode, Note, Rect, Rgb};
 
-const DEFAULT_WIDTH: f32 = 260.0;
-const DEFAULT_HEIGHT: f32 = 240.0;
+use crate::model::geometry::DEFAULT_NOTE_SIZE;
+
+const DEFAULT_WIDTH: f32 = DEFAULT_NOTE_SIZE.0;
+const DEFAULT_HEIGHT: f32 = DEFAULT_NOTE_SIZE.1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FormatError {

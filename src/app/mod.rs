@@ -2,7 +2,9 @@
 
 mod desk;
 mod drag;
+mod edit;
 mod note_view;
+mod pickers;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -19,11 +21,11 @@ use cosmic::{Element, executor, widget};
 use uuid::Uuid;
 
 use cosmic_sticky::model::geometry::{self, OutputGeom, Rect};
-use cosmic_sticky::model::{self as model, Categories, Content, Note};
+use cosmic_sticky::model::{self as model, Categories, CategoryId, Font, Note, Rgb};
 use cosmic_sticky::storage::Store;
 use desk::Desk;
 use drag::{Drag, DragKind};
-use note_view::{Field, NoteColors, NoteParts};
+use note_view::{Field, NoteParts, Panel};
 
 const AUTOSAVE_DELAY: Duration = Duration::from_millis(500);
 /// Editors are unfocused after this long without input: keyboard focus stays on our surface
@@ -34,6 +36,8 @@ struct NoteState {
     note: Note,
     title: text_editor::Content,
     body: text_editor::Content,
+    items: Vec<text_editor::Content>,
+    panel: Option<Panel>,
     edits: u64,
     saved_edits: u64,
     save_timer: Option<TaskHandle>,
@@ -41,18 +45,18 @@ struct NoteState {
 
 impl NoteState {
     fn new(note: Note) -> Self {
-        let body = match &note.content {
-            Content::Text(text) => text_editor::Content::with_text(text),
-            Content::Checklist(_) => text_editor::Content::new(),
-        };
-        Self {
+        let mut state = Self {
             title: text_editor::Content::with_text(&note.title),
-            body,
+            body: text_editor::Content::new(),
+            items: Vec::new(),
+            panel: None,
             note,
             edits: 0,
             saved_edits: 0,
             save_timer: None,
-        }
+        };
+        state.sync_editors();
+        state
     }
 
     fn dirty(&self) -> bool {
@@ -86,9 +90,19 @@ pub enum Message {
     Escape,
     Focused(SurfaceId, bool),
     StartDrag(Uuid, DragKind),
-    Title(Uuid, text_editor::Action),
-    Body(Uuid, text_editor::Action),
-    FocusBody(Uuid),
+    Edit(Uuid, Field, text_editor::Action),
+    TitleEnter(Uuid),
+    ItemEnter(Uuid, usize),
+    AddItem(Uuid),
+    RemoveItem(Uuid, usize),
+    ToggleItem(Uuid, usize),
+    ToggleMode(Uuid),
+    OpenPanel(Uuid, Panel),
+    ClosePanel(Uuid),
+    ChooseCategory(Uuid, CategoryId),
+    SetColor(Uuid, Option<Rgb>),
+    SetFont(Uuid, Font),
+    NewNote(Uuid),
     SaveDue(Uuid, u64),
     IdleUnfocus(u64),
 }
@@ -361,7 +375,7 @@ fn timer(delay: Duration, message: Message) -> (Task<Message>, TaskHandle) {
     (task, handle.abort_on_drop())
 }
 
-fn single_line(text: &str) -> String {
+pub(super) fn single_line(text: &str) -> String {
     text.replace(['\r', '\n'], " ")
 }
 
@@ -383,6 +397,7 @@ impl cosmic::Application for App {
         // With frosted themes, libcosmic asks the compositor to blur everything behind our
         // full-output transparent surfaces, i.e. the whole desktop.
         core.set_auto_blur(Default::default());
+        crate::fonts::load();
 
         let store = Store::default_root()
             .ok_or_else(|| std::io::Error::other("neither XDG_DATA_HOME nor HOME is set"))
@@ -458,7 +473,11 @@ impl cosmic::Application for App {
     fn update(&mut self, message: Message) -> Task<Message> {
         let editor_input = matches!(
             message,
-            Message::Title(..) | Message::Body(..) | Message::FocusBody(_)
+            Message::Edit(..)
+                | Message::TitleEnter(_)
+                | Message::ItemEnter(..)
+                | Message::AddItem(_)
+                | Message::RemoveItem(..)
         );
         let task = self.handle(message);
         if editor_input {
@@ -502,7 +521,10 @@ impl App {
             }
             Message::PointerPressed(surface) => self.raise_at(surface),
             Message::PointerReleased => self.finish_drag(),
-            Message::Escape => self.unfocus_editors(),
+            Message::Escape => {
+                self.close_all_panels();
+                self.unfocus_editors()
+            }
             Message::IdleUnfocus(activity) => {
                 if activity == self.editor_activity && self.editing.is_some() {
                     tracing::debug!("unfocusing idle editor");
@@ -523,48 +545,36 @@ impl App {
                 self.start_drag(id, kind);
                 Task::none()
             }
-            Message::Title(id, action) => {
-                let Some(n) = self.note_mut(id) else {
-                    return Task::none();
+            Message::Edit(id, field, action) => self.on_edit(id, field, action),
+            Message::TitleEnter(id) => {
+                let first = match self.notes.iter().find(|n| n.note.id == id) {
+                    Some(n) if n.items.is_empty() && n.note.mode() == model::Mode::Checklist => {
+                        return self.insert_item(id, 0);
+                    }
+                    Some(n) if !n.items.is_empty() => Field::Item(0),
+                    _ => Field::Body,
                 };
-                let is_edit = action.is_edit();
-                let focus = matches!(action, text_editor::Action::Click(_));
-                n.title.perform(action);
-                if focus {
-                    self.editing = Some((id, Field::Title));
-                    return self.refocus();
-                }
-                if !is_edit {
-                    return Task::none();
-                }
-                let text = n.title.text();
-                if text.contains(['\r', '\n']) {
-                    n.title = text_editor::Content::with_text(&single_line(&text));
-                }
-                n.note.title = single_line(&text);
-                self.edited(id)
-            }
-            Message::Body(id, action) => {
-                let Some(n) = self.note_mut(id) else {
-                    return Task::none();
-                };
-                let is_edit = action.is_edit();
-                let focus = matches!(action, text_editor::Action::Click(_));
-                n.body.perform(action);
-                if focus {
-                    self.editing = Some((id, Field::Body));
-                    return self.refocus();
-                }
-                if !is_edit {
-                    return Task::none();
-                }
-                n.note.content = Content::Text(n.body.text());
-                self.edited(id)
-            }
-            Message::FocusBody(id) => {
-                self.editing = Some((id, Field::Body));
+                self.editing = Some((id, first));
                 self.refocus()
             }
+            Message::ItemEnter(id, index) => self.insert_item(id, index + 1),
+            Message::AddItem(id) => {
+                let len = self
+                    .notes
+                    .iter()
+                    .find(|n| n.note.id == id)
+                    .map_or(0, |n| n.items.len());
+                self.insert_item(id, len)
+            }
+            Message::RemoveItem(id, index) => self.remove_item(id, index),
+            Message::ToggleItem(id, index) => self.toggle_item(id, index),
+            Message::ToggleMode(id) => self.toggle_mode(id),
+            Message::OpenPanel(id, panel) => self.open_panel(id, panel),
+            Message::ClosePanel(id) => self.close_panel(id),
+            Message::ChooseCategory(id, category) => self.choose_category(id, category),
+            Message::SetColor(id, color) => self.set_color(id, color),
+            Message::SetFont(id, font) => self.set_font(id, font),
+            Message::NewNote(parent) => self.new_note_beside(parent),
             Message::SaveDue(id, edits) => {
                 if self
                     .notes
@@ -590,11 +600,13 @@ impl App {
             }
             let card = note_view::view(NoteParts {
                 note: &n.note,
+                categories: &self.categories,
                 title: &n.title,
                 body: &n.body,
+                items: &n.items,
+                panel: n.panel,
                 hovered: self.hovered == Some(n.note.id),
                 rect,
-                colors: NoteColors::new(n.note.color(&self.categories)),
             });
             Some(pin(card).x(rect.x).y(rect.y).into())
         });
