@@ -29,7 +29,7 @@ Categories
 - Changing a note's category later is supported.
 
 Notes
-- Editable title and body; category picker; color picker; font picker (max 5 fonts;
+- Editable title and body; category picker; color picker; font picker (10 fonts, raised from 5 on 2026-11-05;
   use system fonts with fallbacks, or bundle OFL-licensed fonts; include a handwriting-style option).
 - Checklist mode: lines with checkboxes. Notes created in "To-do's" start in checklist mode;
   any note can toggle between text and checklist.
@@ -63,7 +63,7 @@ Due dates/reminders, rich text, images, built-in sync, accounts.
 - [x] Drag and resize work; position/size persist
 - [x] Create note via "+" and via CLI, choosing a category
 - [x] Category CRUD with reassign-on-delete; per-note color override and reset
-- [x] Font picker (<=5), auto text contrast
+- [x] Font picker (10), auto text contrast
 - [x] Trash + undo; show/hide all; list view with search and filter
 - [x] Plain-file storage with live reload of external edits
 - [x] `just install` works; autostart works; idle CPU ~0%

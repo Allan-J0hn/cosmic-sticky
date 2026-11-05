@@ -402,6 +402,11 @@ recreates the desk surfaces, and the state persists in `settings.yaml`.
    --category NAME` skips the picker.
 5. **Fonts (4):** Sans (COSMIC UI font), Serif (Noto Serif), Mono (Noto Sans Mono), Handwriting
    (bundled *Shadows Into Light*, OFL, with license file). Missing system fonts fall back to Sans.
+   *Changed 2026-11-05 at the user's request:* 10 fonts. Added, bundled with their licenses:
+   Patrick Hand ("Neat hand"), Architects Daughter, Pacifico ("Retro script"), VT323
+   ("Terminal") under OFL; Permanent Marker ("Marker"), Special Elite ("Typewriter") under
+   Apache 2.0. The picker is a two-column grid, each name drawn in its own font. A font name
+   this version doesn't know loads as Sans instead of making the note unreadable.
 6. **Text ↔ checklist** is lossless: lines become items, and items become `- [ ]`/`- [x]` lines.
 7. **Reveal** works as proposed: the output's desk surface goes to Top showing only that note,
    until Escape, a click elsewhere, or 8 s.

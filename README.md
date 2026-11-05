@@ -20,7 +20,8 @@ while idle and redraws only when something changes.
   recolor or delete your own. Deleting a category moves its notes to the one you choose.
   Any single note can also have its own color.
 - **Readable on any color.** Text switches between black and white for good contrast.
-- **Four fonts:** Sans, Serif, Monospace and Handwriting.
+- **Ten fonts,** each previewed in the picker: Sans, Serif, Monospace, Handwriting, Neat hand,
+  Architect, plus a few with more character: Marker, Typewriter, Retro script and Terminal.
 - **Trash with undo.** Deleting a note shows an *Undo* button for 10 seconds; deleted notes
   stay in the trash for 7 days and can be restored from the list.
 - **Notes list.** Search titles and text, filter by category, click a note to bring it in
@@ -159,5 +160,7 @@ session with simulated input, so read them before running them.
 
 ## License
 
-GPL-3.0-only, see [LICENSE](LICENSE). The bundled *Shadows Into Light* font is under the
-SIL Open Font License (`resources/fonts/ShadowsIntoLight-OFL.txt`).
+GPL-3.0-only, see [LICENSE](LICENSE). The bundled fonts keep their own licenses, included
+next to them in `resources/fonts/`: *Shadows Into Light*, *Patrick Hand*, *Architects
+Daughter*, *Pacifico* and *VT323* under the SIL Open Font License; *Permanent Marker* and
+*Special Elite* under the Apache License 2.0.

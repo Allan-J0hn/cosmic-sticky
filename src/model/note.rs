@@ -16,6 +16,12 @@ pub enum Font {
     Serif,
     Mono,
     Handwriting,
+    Neat,
+    Architect,
+    Marker,
+    Typewriter,
+    Script,
+    Terminal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

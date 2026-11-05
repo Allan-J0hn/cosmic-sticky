@@ -44,7 +44,7 @@ struct Frontmatter {
     category: CategoryId,
     #[serde(default)]
     color_override: Option<Rgb>,
-    #[serde(default, deserialize_with = "null_as_default")]
+    #[serde(default, deserialize_with = "font_or_default")]
     font: Font,
     #[serde(default, deserialize_with = "null_as_default")]
     mode: Mode,
@@ -75,6 +75,19 @@ where
     T: Default + Deserialize<'de>,
 {
     Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
+}
+
+/// A font this version doesn't know (e.g. written by a newer one) falls back to the default
+/// instead of making the whole note unreadable.
+fn font_or_default<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Font, D::Error> {
+    use serde::de::IntoDeserializer;
+    let name = Option::<String>::deserialize(d)?;
+    Ok(name
+        .and_then(|n| {
+            Font::deserialize(IntoDeserializer::<serde::de::value::Error>::into_deserializer(n))
+                .ok()
+        })
+        .unwrap_or_default())
 }
 
 fn default_width() -> f32 {
@@ -370,6 +383,37 @@ mod tests {
         assert_eq!(n.mode(), Mode::Text);
         assert_eq!(n.output, "");
         assert_eq!(n.color_override, None);
+    }
+
+    #[test]
+    fn every_font_round_trips_and_unknown_fonts_fall_back() {
+        use crate::model::Font::*;
+        for font in [
+            Sans,
+            Serif,
+            Mono,
+            Handwriting,
+            Neat,
+            Architect,
+            Marker,
+            Typewriter,
+            Script,
+            Terminal,
+        ] {
+            let mut n = sample();
+            n.font = font;
+            let md = note_to_markdown(&n, None).unwrap();
+            assert_eq!(
+                note_from_markdown(&md, n.id, Timestamp::UNIX_EPOCH)
+                    .unwrap()
+                    .0
+                    .font,
+                font
+            );
+        }
+        let text = "---\ntitle: hi\nfont: wingdings\n---\nbody";
+        let (n, _) = note_from_markdown(text, Uuid::nil(), Timestamp::UNIX_EPOCH).unwrap();
+        assert_eq!((n.title.as_str(), n.font), ("hi", Font::Sans));
     }
 
     #[test]
