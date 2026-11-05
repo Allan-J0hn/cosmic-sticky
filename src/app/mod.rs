@@ -818,6 +818,26 @@ impl App {
         }
     }
 
+    /// A note being dragged over an output edge is drawn on the neighbouring output too, so it
+    /// can be seen crossing; it moves there on release.
+    fn dragged_onto(
+        &self,
+        id: Uuid,
+        output: &str,
+        rect: Rect,
+        desk: &OutputGeom,
+        outputs: &[OutputGeom],
+    ) -> Option<Rect> {
+        self.drag.as_ref().filter(|(d, _)| d.note == id)?;
+        let from = outputs.iter().find(|o| o.name == output)?;
+        let local = rect.translate(
+            from.position.0 - desk.position.0,
+            from.position.1 - desk.position.1,
+        );
+        let screen = Rect::new(0.0, 0.0, desk.size.0, desk.size.1);
+        local.intersection(&screen).map(|_| local)
+    }
+
     fn desk_view(&self, surface: SurfaceId) -> Element<'_, Message> {
         let Some(desk) = self.desk_for_surface(surface) else {
             return widget::space().into();
@@ -829,9 +849,11 @@ impl App {
                 return None;
             }
             let (output, rect) = self.placement(&n.note, &outputs)?;
-            if output != desk.geom.name {
-                return None;
-            }
+            let rect = if output == desk.geom.name {
+                rect
+            } else {
+                self.dragged_onto(n.note.id, &output, rect, &desk.geom, &outputs)?
+            };
             let card = note_view::view(NoteParts {
                 note: &n.note,
                 categories: &self.categories,
@@ -842,7 +864,7 @@ impl App {
                 hovered: self.hovered == Some(n.note.id),
                 rect,
             });
-            Some(pin(card).x(rect.x).y(rect.y).into())
+            Some(pin(card).x(rect.x).y(rect.y).overflow(true).into())
         });
         let mut layers: Vec<Element<'_, Message>> = layers.collect();
         if let Some(chip) = self.undo.as_ref().filter(|u| u.output == desk.geom.name) {
