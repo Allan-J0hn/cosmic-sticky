@@ -94,6 +94,7 @@ pub struct App {
     list: Option<ListWindow>,
     /// Show/hide all; while hidden the desks keep their output geometry but have no surface.
     visible: bool,
+    _lock: Option<std::fs::File>,
 }
 
 /// What this launch asked for; forwarded to the running instance if there is one.
@@ -483,6 +484,20 @@ impl cosmic::Application for App {
             .and_then(Store::open)
             .inspect_err(|e| tracing::error!("cannot open note storage: {e}"))
             .ok();
+        // Two launches at the same instant can both miss the other on D-Bus; only one may
+        // own the notes.
+        let lock = match store.as_ref().map(Store::lock) {
+            Some(Ok(Some(lock))) => Some(lock),
+            Some(Ok(None)) => {
+                tracing::error!("another cosmic-sticky is already running; exiting");
+                std::process::exit(1);
+            }
+            Some(Err(e)) => {
+                tracing::warn!("cannot lock the data directory: {e}");
+                None
+            }
+            None => None,
+        };
         let mut categories = Categories::default();
         let mut notes = Vec::new();
         if let Some(store) = &store {
@@ -533,6 +548,7 @@ impl cosmic::Application for App {
             reveal_generation: 0,
             list: None,
             visible,
+            _lock: lock,
         };
         let mut tasks = vec![app.schedule_purge()];
         match flags.command {

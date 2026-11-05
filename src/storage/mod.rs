@@ -46,6 +46,17 @@ impl Store {
         Ok(store)
     }
 
+    /// Exclusive lock on the data directory, held for as long as the returned file lives.
+    /// `None` if another process holds it.
+    pub fn lock(&self) -> io::Result<Option<std::fs::File>> {
+        let file = std::fs::File::create(self.root.join(".lock"))?;
+        match file.try_lock() {
+            Ok(()) => Ok(Some(file)),
+            Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+            Err(std::fs::TryLockError::Error(e)) => Err(e),
+        }
+    }
+
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -190,6 +201,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path().join("data")).unwrap();
         (dir, store)
+    }
+
+    #[test]
+    fn lock_is_exclusive() {
+        let (_dir, s) = store();
+        let first = s.lock().unwrap();
+        assert!(first.is_some());
+        assert!(s.lock().unwrap().is_none());
+        drop(first);
+        assert!(s.lock().unwrap().is_some());
     }
 
     pub(crate) fn note(title: &str) -> Note {
