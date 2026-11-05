@@ -3,8 +3,11 @@
 mod desk;
 mod drag;
 mod edit;
+mod lifecycle;
+mod list_window;
 mod note_view;
 mod pickers;
+mod reveal;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -16,16 +19,19 @@ use cosmic::iced::event::wayland::{Event as WaylandEvent, OutputEvent};
 use cosmic::iced::event::{self, Event, PlatformSpecific};
 use cosmic::iced::task::Handle as TaskHandle;
 use cosmic::iced::widget::{pin, stack, text_editor};
-use cosmic::iced::{Color, Length, Point, Subscription, keyboard, mouse, window};
+use cosmic::iced::{Color, Length, Point, Size, Subscription, keyboard, mouse, window};
 use cosmic::{Element, executor, widget};
 use uuid::Uuid;
 
 use cosmic_sticky::model::geometry::{self, OutputGeom, Rect};
 use cosmic_sticky::model::{self as model, Categories, CategoryId, Font, Note, Rgb};
-use cosmic_sticky::storage::Store;
+use cosmic_sticky::storage::{Store, TrashedNote};
 use desk::Desk;
 use drag::{Drag, DragKind};
+use lifecycle::UndoChip;
+use list_window::{ListMessage, ListWindow};
 use note_view::{Field, NoteParts, Panel};
+use reveal::Reveal;
 
 const AUTOSAVE_DELAY: Duration = Duration::from_millis(500);
 /// Editors are unfocused after this long without input: keyboard focus stays on our surface
@@ -78,6 +84,12 @@ pub struct App {
     editing: Option<(Uuid, Field)>,
     editor_activity: u64,
     idle_timer: Option<TaskHandle>,
+    trash: Vec<TrashedNote>,
+    undo: Option<UndoChip>,
+    purge_timer: Option<TaskHandle>,
+    reveal: Option<Reveal>,
+    reveal_generation: u64,
+    list: Option<ListWindow>,
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +117,16 @@ pub enum Message {
     NewNote(Uuid),
     SaveDue(Uuid, u64),
     IdleUnfocus(u64),
+    DeleteNote(Uuid),
+    Restore(Uuid),
+    UndoExpired(Uuid),
+    PurgeDue,
+    RevealExpired(u64),
+    List(ListMessage),
+    WindowOpened(SurfaceId, Size),
+    WindowResized(SurfaceId, Size),
+    CloseRequested(SurfaceId),
+    WindowClosed(SurfaceId),
 }
 
 impl App {
@@ -139,6 +161,12 @@ impl App {
             .filter_map(|n| self.placement(&n.note, &outputs))
             .filter(|(name, _)| name == output)
             .map(|(_, rect)| rect)
+            .chain(
+                self.undo
+                    .iter()
+                    .filter(|u| u.output == output)
+                    .map(|u| u.rect),
+            )
             .collect()
     }
 
@@ -146,6 +174,7 @@ impl App {
         Task::batch(
             self.desks
                 .values()
+                .filter(|d| self.reveal.as_ref().is_none_or(|r| r.surface != d.surface))
                 .map(|d| d.set_input_region(self.rects_on(&d.geom.name))),
         )
     }
@@ -247,9 +276,12 @@ impl App {
         let desk = self.desk_for_surface(surface)?;
         let cursor = self.cursor.get(&surface)?;
         let outputs = self.outputs();
+        let revealed = self.reveal.as_ref().map(|r| r.note);
         self.notes.iter().rposition(|n| {
-            self.placement(&n.note, &outputs)
-                .is_some_and(|(o, r)| o == desk.geom.name && r.contains((cursor.x, cursor.y)))
+            revealed.is_none_or(|r| r == n.note.id)
+                && self
+                    .placement(&n.note, &outputs)
+                    .is_some_and(|(o, r)| o == desk.geom.name && r.contains((cursor.x, cursor.y)))
         })
     }
 
@@ -419,8 +451,18 @@ impl cosmic::Application for App {
         }
         notes.sort_by_key(|n| n.modified);
         tracing::info!(count = notes.len(), "notes loaded");
+        let mut trash = Vec::new();
+        if let Some(store) = &store {
+            if let Err(e) = store.purge_trash(model::now()) {
+                tracing::error!("purging trash: {e}");
+            }
+            match store.load_trash() {
+                Ok(loaded) => trash = loaded.items,
+                Err(e) => tracing::error!("loading trash: {e}"),
+            }
+        }
 
-        let app = App {
+        let mut app = App {
             core,
             store,
             categories,
@@ -432,8 +474,18 @@ impl cosmic::Application for App {
             editing: None,
             editor_activity: 0,
             idle_timer: None,
+            trash,
+            undo: None,
+            purge_timer: None,
+            reveal: None,
+            reveal_generation: 0,
+            list: None,
         };
-        (app, Task::none())
+        let mut tasks = vec![app.schedule_purge()];
+        if std::env::args().skip(1).any(|a| a == "--list") {
+            tasks.push(app.open_list());
+        }
+        (app, Task::batch(tasks))
     }
 
     fn style(&self) -> Option<cosmic::iced::theme::Style> {
@@ -464,6 +516,14 @@ impl cosmic::Application for App {
                 key: keyboard::Key::Named(keyboard::key::Named::Escape),
                 ..
             }) => Some(Message::Escape),
+            Event::Window(window::Event::Opened { size, .. }) => {
+                Some(Message::WindowOpened(surface, size))
+            }
+            Event::Window(window::Event::Resized(size)) => {
+                Some(Message::WindowResized(surface, size))
+            }
+            Event::Window(window::Event::CloseRequested) => Some(Message::CloseRequested(surface)),
+            Event::Window(window::Event::Closed) => Some(Message::WindowClosed(surface)),
             Event::Window(window::Event::Focused) => Some(Message::Focused(surface, true)),
             Event::Window(window::Event::Unfocused) => Some(Message::Focused(surface, false)),
             _ => None,
@@ -481,7 +541,7 @@ impl cosmic::Application for App {
         );
         let task = self.handle(message);
         if editor_input {
-            Task::batch([task, self.arm_idle_unfocus()])
+            Task::batch([task, self.arm_idle_unfocus(), self.extend_reveal()])
         } else {
             task
         }
@@ -492,6 +552,9 @@ impl cosmic::Application for App {
     }
 
     fn view_window(&self, surface: SurfaceId) -> Element<'_, Message> {
+        if let Some(list) = self.list.as_ref().filter(|l| l.id == surface) {
+            return self.list_view(list);
+        }
         self.desk_view(surface)
     }
 }
@@ -501,6 +564,10 @@ impl App {
         match message {
             Message::Output(event, output) => self.on_output(*event, output),
             Message::CursorMoved(surface, position) => {
+                if self.list.as_ref().is_some_and(|l| l.id == surface) {
+                    tracing::debug!(x = position.x, y = position.y, "list cursor");
+                    return Task::none();
+                }
                 self.cursor.insert(surface, position);
                 if let Some((drag, rect)) = &mut self.drag {
                     if drag.surface == surface {
@@ -509,6 +576,12 @@ impl App {
                 } else {
                     let hovered = self.note_at(surface).map(|i| self.notes[i].note.id);
                     self.set_hovered(hovered);
+                    if let (Some(desk), Some(chip)) = (self.desk_for_surface(surface), &self.undo)
+                        && chip.output == desk.geom.name
+                        && chip.rect.contains((position.x, position.y))
+                    {
+                        tracing::trace!(x = position.x, y = position.y, "over undo chip");
+                    }
                 }
                 Task::none()
             }
@@ -519,11 +592,22 @@ impl App {
                 }
                 Task::none()
             }
-            Message::PointerPressed(surface) => self.raise_at(surface),
+            Message::PointerPressed(surface) => {
+                if self.list.as_ref().is_some_and(|l| l.id == surface) {
+                    return self.end_reveal();
+                }
+                if self.reveal.is_some() {
+                    if self.note_at(surface).is_some() {
+                        return Task::batch([self.extend_reveal(), self.raise_at(surface)]);
+                    }
+                    return self.end_reveal();
+                }
+                self.raise_at(surface)
+            }
             Message::PointerReleased => self.finish_drag(),
             Message::Escape => {
                 self.close_all_panels();
-                self.unfocus_editors()
+                Task::batch([self.end_reveal(), self.unfocus_editors()])
             }
             Message::IdleUnfocus(activity) => {
                 if activity == self.editor_activity && self.editing.is_some() {
@@ -535,6 +619,8 @@ impl App {
             Message::Focused(surface, focused) => {
                 if let Some(desk) = self.desk_for_surface(surface) {
                     tracing::debug!(output = %desk.geom.name, focused, "keyboard focus");
+                } else if self.list.as_ref().is_some_and(|l| l.id == surface) {
+                    tracing::debug!(focused, "list focus");
                 }
                 if !focused {
                     self.save_dirty();
@@ -575,6 +661,38 @@ impl App {
             Message::SetColor(id, color) => self.set_color(id, color),
             Message::SetFont(id, font) => self.set_font(id, font),
             Message::NewNote(parent) => self.new_note_beside(parent),
+            Message::DeleteNote(id) => self.delete_note(id),
+            Message::Restore(id) => self.restore(id),
+            Message::UndoExpired(id) => self.undo_expired(id),
+            Message::PurgeDue => self.purge(model::now()),
+            Message::RevealExpired(generation) => self.reveal_expired(generation),
+            Message::List(message) => self.on_list(message),
+            Message::WindowOpened(surface, size) => {
+                if self.list.as_ref().is_some_and(|l| l.id == surface) {
+                    tracing::debug!(width = size.width, height = size.height, "list size");
+                    return self.list_opened();
+                }
+                Task::none()
+            }
+            Message::WindowResized(surface, size) => {
+                if self.list.as_ref().is_some_and(|l| l.id == surface) {
+                    tracing::debug!(width = size.width, height = size.height, "list size");
+                }
+                Task::none()
+            }
+            Message::CloseRequested(surface) => {
+                if self.list.as_ref().is_some_and(|l| l.id == surface) {
+                    return window::close(surface);
+                }
+                Task::none()
+            }
+            Message::WindowClosed(surface) => {
+                if self.list.as_ref().is_some_and(|l| l.id == surface) {
+                    tracing::info!("list window closed");
+                    self.list = None;
+                }
+                Task::none()
+            }
             Message::SaveDue(id, edits) => {
                 if self
                     .notes
@@ -593,7 +711,11 @@ impl App {
             return widget::space().into();
         };
         let outputs = self.outputs();
+        let revealed = self.revealed_on(surface);
         let layers = self.notes.iter().filter_map(|n| {
+            if revealed.is_some_and(|r| r != n.note.id) {
+                return None;
+            }
             let (output, rect) = self.placement(&n.note, &outputs)?;
             if output != desk.geom.name {
                 return None;
@@ -610,7 +732,16 @@ impl App {
             });
             Some(pin(card).x(rect.x).y(rect.y).into())
         });
-        stack(layers.collect::<Vec<Element<'_, Message>>>())
+        let mut layers: Vec<Element<'_, Message>> = layers.collect();
+        if let Some(chip) = self.undo.as_ref().filter(|u| u.output == desk.geom.name) {
+            layers.push(
+                pin(self.undo_chip_view(chip))
+                    .x(chip.rect.x)
+                    .y(chip.rect.y)
+                    .into(),
+            );
+        }
+        stack(layers)
             .width(Length::Fill)
             .height(Length::Fill)
             .into()

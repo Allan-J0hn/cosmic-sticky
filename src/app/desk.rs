@@ -8,6 +8,7 @@ use cosmic::iced::platform_specific::runtime::wayland::layer_surface::{
 };
 use cosmic::iced::platform_specific::shell::commands::layer_surface::{
     Anchor, KeyboardInteractivity, Layer, destroy_layer_surface, get_layer_surface, set_input_zone,
+    set_keyboard_interactivity, set_layer,
 };
 use cosmic::iced::{Limits, Point, Rectangle, Size};
 
@@ -57,6 +58,28 @@ impl Desk {
 
     pub fn set_input_region<M: 'static>(&self, notes: impl IntoIterator<Item = Rect>) -> Task<M> {
         set_input_zone(self.surface, Some(self.zone(notes)))
+    }
+
+    /// Above windows with the whole output taking input, so a click anywhere can end the reveal
+    /// and Escape reaches us.
+    pub fn raise<M: 'static>(&self) -> Task<M> {
+        let (w, h) = self.geom.size;
+        Task::batch([
+            set_layer(self.surface, Layer::Top),
+            set_keyboard_interactivity(self.surface, KeyboardInteractivity::Exclusive),
+            set_input_zone(
+                self.surface,
+                Some(vec![Rectangle::new(Point::ORIGIN, Size::new(w, h))]),
+            ),
+        ])
+    }
+
+    pub fn lower<M: 'static>(&self, notes: impl IntoIterator<Item = Rect>) -> Task<M> {
+        Task::batch([
+            set_layer(self.surface, Layer::Bottom),
+            set_keyboard_interactivity(self.surface, KeyboardInteractivity::OnDemand),
+            self.set_input_region(notes),
+        ])
     }
 
     pub fn destroy<M: 'static>(&self) -> Task<M> {

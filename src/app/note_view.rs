@@ -159,6 +159,10 @@ fn header<'a>(
         };
         row![
             tap(symbolic("list-add-symbolic", colors), Message::NewNote(id)),
+            tap(
+                symbolic("edit-delete-symbolic", colors),
+                Message::DeleteNote(id)
+            ),
             widget::space().width(Length::Fill),
             tap(
                 category_dot,

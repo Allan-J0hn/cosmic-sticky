@@ -97,6 +97,27 @@ pub fn beside(parent: Rect, size: (f32, f32), output_size: (f32, f32)) -> Rect {
     Rect::new(x, y, w, h).clamp_into(output_size).round()
 }
 
+/// A spot for a note created without a parent: cascades from the top-left corner until no
+/// existing note starts at (nearly) the same place.
+pub fn free_spot(existing: &[Rect], size: (f32, f32), output_size: (f32, f32)) -> Rect {
+    const START: f32 = 96.0;
+    const STEP: f32 = 32.0;
+    let taken = |r: &Rect| {
+        existing
+            .iter()
+            .any(|e| (e.x - r.x).abs() < 8.0 && (e.y - r.y).abs() < 8.0)
+    };
+    let mut candidate = Rect::new(START, START, size.0, size.1).clamp_into(output_size);
+    for i in 0..64 {
+        let offset = START + STEP * i as f32;
+        candidate = Rect::new(offset, offset, size.0, size.1).clamp_into(output_size);
+        if !taken(&candidate) {
+            break;
+        }
+    }
+    candidate.round()
+}
+
 /// A connected output in the global compositor space.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OutputGeom {
@@ -284,6 +305,25 @@ mod tests {
             beside(wide, size, OUTPUT),
             Rect::new(124.0, 840.0, 260.0, 240.0)
         );
+    }
+
+    #[test]
+    fn free_spot_cascades_past_existing_notes() {
+        let size = DEFAULT_NOTE_SIZE;
+        assert_eq!(
+            free_spot(&[], size, OUTPUT),
+            Rect::new(96.0, 96.0, 260.0, 240.0)
+        );
+        let existing = [
+            Rect::new(96.0, 96.0, 260.0, 240.0),
+            Rect::new(130.0, 125.0, 260.0, 240.0),
+        ];
+        assert_eq!(
+            free_spot(&existing, size, OUTPUT),
+            Rect::new(160.0, 160.0, 260.0, 240.0)
+        );
+        let r = free_spot(&[], size, (300.0, 200.0));
+        assert_eq!(r, r.clamp_into((300.0, 200.0)));
     }
 
     #[test]

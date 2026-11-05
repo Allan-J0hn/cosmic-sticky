@@ -252,10 +252,30 @@ List view window (normal xdg toplevel): search (title and body), category filter
 reveal a note (see Q7), "New note", trash tab with restore and empty. Category management
 (create, rename, recolor, delete with a "move notes to…" choice). Delete note → trash, with an
 undo chip on the desktop (Q8).
-- [ ] Automated: delete a note, then undo restores it at the same place. Delete, then restore from the list view's trash.
-- [ ] Automated: search and filter narrow the list correctly (fixture notes).
-- [ ] Automated: delete a category with notes; you must pick a target, all notes move, and no file is lost (file count invariant).
-- [ ] *Eye check:* the list window follows the COSMIC theme (light and dark).
+- [x] Automated: delete a note, then undo restores it at the same place. Delete, then restore from the list view's trash.
+  (`tools/e2e/m5.sh`, 2026-11-05: file moves, position 200,200 / 200,600 kept, pixel color back.)
+- [x] Automated: search and filter narrow the list correctly (fixture notes). Unit tests in
+  `model::search`; e2e search "milk" → 2 rows. The filter chip was confirmed by eye.
+- [x] Automated: delete a category with notes; you must pick a target, all notes move, and no file is lost (file count invariant).
+  Unit tests in `model::category`; confirmed by eye on fixture data: "Delete category" stays
+  disabled until a target is picked, Reminders' notes (live and trashed) moved to Self care,
+  file count unchanged.
+- [x] *Eye check:* the list window follows the COSMIC theme (user confirmed, 2026-11-05).
+- Also checked by e2e: reveal shows a note above a covering window, and Escape restores the stacking.
+
+**M5 notes**
+- The list window opens tiled (full workspace) when the workspace auto-tiles; its layout is
+  width-independent. Scripted clicks into it proved brittle, so its UI wiring was checked by
+  hand with a throwaway data dir; e2e covers the desk side (delete, undo, reveal).
+- Reveal raises the output's desk to Top with exclusive keyboard focus and only the revealed
+  note drawn. It ends on Escape, any click outside the note (including in the list window), or
+  8 s without interaction with the note; typing in it extends the timer.
+- The note header gains a delete control right of "+". Deleting is immediate (no confirm): the
+  undo chip appears where the note was for 10 s, and the trash keeps it for 7 days.
+- Deleting a category also reassigns trashed notes, so a later restore never lands in a missing
+  category. The last category can't be deleted.
+- New categories take the first palette color not already used.
+- `--list` is only read at startup for now; M6 routes it to the running instance.
 
 ### M6 — Single instance, CLI, show/hide
 libcosmic `single-instance` (D-Bus activation). `cosmic-sticky --toggle | --new [--category

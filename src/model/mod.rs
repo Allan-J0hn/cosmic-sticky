@@ -4,6 +4,7 @@ pub mod category;
 pub mod color;
 pub mod geometry;
 pub mod note;
+pub mod search;
 
 pub use category::{Categories, Category, CategoryError, CategoryId};
 pub use color::{PALETTE, Rgb};

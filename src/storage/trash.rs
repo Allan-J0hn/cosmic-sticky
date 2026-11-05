@@ -45,6 +45,13 @@ impl Store {
         fs::remove_if_exists(&self.note_path(note.id))
     }
 
+    /// Rewrites a trashed note in place, keeping its `trashed_at`.
+    pub fn save_trashed(&self, item: &TrashedNote) -> io::Result<()> {
+        let text =
+            format::note_to_markdown(&item.note, Some(item.trashed_at)).map_err(invalid_data)?;
+        fs::write_atomic(&self.trash_path(item.note.id), text.as_bytes())
+    }
+
     /// Moves a note back to `notes/`. Fails without changes if a note with that id already exists.
     pub fn restore_note(&self, id: Uuid) -> io::Result<Note> {
         let target = self.note_path(id);
@@ -153,6 +160,34 @@ mod tests {
         assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
         assert_eq!(s.load_note(n.id).unwrap(), newer);
         assert_eq!(s.load_trash().unwrap().items.len(), 1);
+    }
+
+    #[test]
+    fn save_trashed_keeps_trash_time() {
+        let (_dir, s) = store();
+        let n = note("x");
+        let when = ts("2026-11-04T18:00:00Z");
+        s.trash_note(&n, when).unwrap();
+        let mut item = s.load_trash().unwrap().items.remove(0);
+        item.note.category = crate::model::CategoryId("self-care".into());
+        s.save_trashed(&item).unwrap();
+        let back = s.load_trash().unwrap().items.remove(0);
+        assert_eq!(back, item);
+        assert_eq!(back.trashed_at, when);
+        assert!(s.load_notes().unwrap().items.is_empty());
+    }
+
+    #[test]
+    fn empty_trash_deletes_everything_trashed() {
+        let (_dir, s) = store();
+        let live = note("live");
+        s.save_note(&live).unwrap();
+        for t in ["a", "b"] {
+            s.trash_note(&note(t), ts("2026-11-04T18:00:00Z")).unwrap();
+        }
+        assert_eq!(s.purge_trash(Timestamp::MAX).unwrap().purged.len(), 2);
+        assert!(s.load_trash().unwrap().items.is_empty());
+        assert_eq!(s.load_notes().unwrap().items, vec![live]);
     }
 
     #[test]
