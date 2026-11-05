@@ -13,10 +13,9 @@ use cosmic::widget::segmented_button::{Entity, SingleSelectModel};
 use cosmic::widget::{self, button, flex_row, icon, scrollable, segmented_control, text};
 use uuid::Uuid;
 
-use super::note_view::{Panel, color};
-use super::{App, Message, NoteState};
+use super::note_view::color;
+use super::{App, Message};
 use crate::fl;
-use cosmic_sticky::model::geometry::{self, DEFAULT_NOTE_SIZE};
 use cosmic_sticky::model::{self as model, CategoryId, Note, PALETTE, Rgb, search};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,7 +146,7 @@ impl App {
                 list.filter = filter;
                 self.log_filter();
             }
-            ListMessage::NewNote => return self.new_note_from_list(),
+            ListMessage::NewNote => return self.new_note(None),
             ListMessage::Reveal(note) => return self.reveal(note),
             ListMessage::Restore(note) => return self.restore(note),
             ListMessage::ConfirmEmpty(confirm) => list.confirm_empty = confirm,
@@ -212,27 +211,6 @@ impl App {
         if let Some(list) = &mut self.list {
             list.error = Some(error.to_string());
         }
-    }
-
-    /// New note on the top-left output, with the category picker open, shown above windows.
-    fn new_note_from_list(&mut self) -> Task<Message> {
-        let outputs = self.outputs();
-        let Some(out) = geometry::place("", None, &outputs).cloned() else {
-            return Task::none();
-        };
-        let existing = self.rects_on(&out.name);
-        let rect = geometry::free_spot(&existing, DEFAULT_NOTE_SIZE, out.size);
-        let category = self.categories.as_slice()[0].clone();
-        let mut note = Note::new(&category, rect, out.name.clone(), model::now());
-        note.output_desc = out.description.clone();
-        let id = note.id;
-        tracing::info!(note = %id, output = %out.name, ?rect, "note created");
-        let mut state = NoteState::new(note);
-        state.panel = Some(Panel::Category { creating: true });
-        state.edits = 1;
-        self.notes.push(state);
-        self.save(id);
-        Task::batch([self.update_input_regions(), self.reveal(id)])
     }
 
     fn add_category(&mut self) -> Task<Message> {

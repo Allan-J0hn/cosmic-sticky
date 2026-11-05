@@ -283,8 +283,23 @@ NAME] | --list` is routed to the running instance, or starts one. Show/hide all 
 recreates the desk surfaces, and the state persists in `settings.yaml`.
 - [ ] Automated: a second launch doesn't start a second process (pid count), and each flag acts on the running one.
 - [ ] Automated: `--toggle` hides (no surfaces; RSS drops) and shows again. The state survives restart.
-- [ ] Unit: CLI parsing, including bad input.
+- [x] Unit: CLI parsing, including bad input (`cli` tests; bad input exits with code 2 and the usage).
 - [ ] *Eye check:* bind `--toggle` and `--new` in COSMIC Settings → Keyboard → Custom shortcuts and confirm they work.
+- From M6 on, the automated live checks are replaced by one quick manual pass by the user
+  (decided 2026-11-05: working product first, fix issues found in use).
+
+**M6 notes**
+- CLI is parsed by hand (no new crate): `--toggle`, `--new [--category NAME|--category=NAME]`,
+  `--list`, `-h/--help`. Category names match case-insensitively; an unknown name logs a
+  warning and opens the category picker instead.
+- libcosmic's `single-instance` feature forwards the command as a D-Bus action to the running
+  instance (`ron` and zbus's blocking API were already in the lockfile). A plain second launch
+  with no option does nothing.
+- `--toggle` when nothing is running starts with the notes shown.
+- `--new` places the note on the top-left output at the first free spot and reveals it above
+  windows, so it can be typed into straight from a shortcut. If notes are hidden, it shows them.
+- Hidden: desks keep their output geometry but have no surface; open panels close and unsaved
+  edits are saved first.
 
 ### M7 — Live reload, autostart, install, final acceptance
 `notify` watcher for external edits, adds and deletes; autostart `.desktop` file;

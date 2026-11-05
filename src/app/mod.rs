@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+mod commands;
 mod desk;
 mod drag;
 mod edit;
@@ -23,6 +24,7 @@ use cosmic::iced::{Color, Length, Point, Size, Subscription, keyboard, mouse, wi
 use cosmic::{Element, executor, widget};
 use uuid::Uuid;
 
+use cosmic_sticky::cli::Command;
 use cosmic_sticky::model::geometry::{self, OutputGeom, Rect};
 use cosmic_sticky::model::{self as model, Categories, CategoryId, Font, Note, Rgb};
 use cosmic_sticky::storage::{Store, TrashedNote};
@@ -90,6 +92,42 @@ pub struct App {
     reveal: Option<Reveal>,
     reveal_generation: u64,
     list: Option<ListWindow>,
+    /// Show/hide all; while hidden the desks keep their output geometry but have no surface.
+    visible: bool,
+}
+
+/// What this launch asked for; forwarded to the running instance if there is one.
+#[derive(Debug, Clone, Default)]
+pub struct Flags {
+    command: Option<Command>,
+    action: Option<String>,
+    args: Vec<String>,
+}
+
+impl Flags {
+    pub fn new(command: Option<Command>) -> Self {
+        Self {
+            action: command.as_ref().map(|c| c.action().to_owned()),
+            args: command
+                .as_ref()
+                .map(Command::action_args)
+                .unwrap_or_default(),
+            command,
+        }
+    }
+}
+
+impl cosmic::app::CosmicFlags for Flags {
+    type SubCommand = String;
+    type Args = Vec<String>;
+
+    fn action(&self) -> Option<&String> {
+        self.action.as_ref()
+    }
+
+    fn args(&self) -> Vec<&str> {
+        self.args.iter().map(String::as_str).collect()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -171,6 +209,9 @@ impl App {
     }
 
     fn update_input_regions(&self) -> Task<Message> {
+        if !self.visible {
+            return Task::none();
+        }
         Task::batch(
             self.desks
                 .values()
@@ -187,10 +228,13 @@ impl App {
                 let desk = Desk::new(geom);
                 let old = self.desks.insert(output.clone(), desk);
                 let desk = &self.desks[&output];
-                let create = desk.create(&output, self.rects_on(&desk.geom.name));
-                let mut tasks = vec![create, self.update_input_regions()];
-                if let Some(old) = old {
-                    tasks.push(old.destroy());
+                let mut tasks = Vec::new();
+                if self.visible {
+                    tasks.push(desk.create(&output, self.rects_on(&desk.geom.name)));
+                    tasks.push(self.update_input_regions());
+                    if let Some(old) = old {
+                        tasks.push(old.destroy());
+                    }
                 }
                 Task::batch(tasks)
             }
@@ -224,6 +268,9 @@ impl App {
                     tracing::info!(output = %desk.geom.name, "output removed");
                     if self.drag.is_some_and(|(d, _)| d.surface == desk.surface) {
                         self.drag = None;
+                    }
+                    if !self.visible {
+                        return Task::none();
                     }
                     Task::batch([desk.destroy(), self.update_input_regions()])
                 }
@@ -413,7 +460,7 @@ pub(super) fn single_line(text: &str) -> String {
 
 impl cosmic::Application for App {
     type Executor = executor::Default;
-    type Flags = ();
+    type Flags = Flags;
     type Message = Message;
     const APP_ID: &'static str = "io.github.Allan_J0hn.CosmicSticky";
 
@@ -425,7 +472,7 @@ impl cosmic::Application for App {
         &mut self.core
     }
 
-    fn init(mut core: Core, _flags: ()) -> (Self, Task<Message>) {
+    fn init(mut core: Core, flags: Flags) -> (Self, Task<Message>) {
         // With frosted themes, libcosmic asks the compositor to blur everything behind our
         // full-output transparent surfaces, i.e. the whole desktop.
         core.set_auto_blur(Default::default());
@@ -452,7 +499,12 @@ impl cosmic::Application for App {
         notes.sort_by_key(|n| n.modified);
         tracing::info!(count = notes.len(), "notes loaded");
         let mut trash = Vec::new();
+        let mut visible = true;
         if let Some(store) = &store {
+            match store.load_settings() {
+                Ok(s) => visible = s.notes_visible,
+                Err(e) => tracing::error!("loading settings: {e}"),
+            }
             if let Err(e) = store.purge_trash(model::now()) {
                 tracing::error!("purging trash: {e}");
             }
@@ -480,10 +532,14 @@ impl cosmic::Application for App {
             reveal: None,
             reveal_generation: 0,
             list: None,
+            visible,
         };
         let mut tasks = vec![app.schedule_purge()];
-        if std::env::args().skip(1).any(|a| a == "--list") {
-            tasks.push(app.open_list());
+        match flags.command {
+            // Nothing was showing before this launch, so a toggle shows the notes.
+            Some(Command::Toggle) => tasks.push(app.set_visible(true)),
+            Some(command) => tasks.push(app.run_command(command)),
+            None => {}
         }
         (app, Task::batch(tasks))
     }
@@ -544,6 +600,21 @@ impl cosmic::Application for App {
             Task::batch([task, self.arm_idle_unfocus(), self.extend_reveal()])
         } else {
             task
+        }
+    }
+
+    fn dbus_activation(&mut self, msg: cosmic::dbus_activation::Message) -> Task<Message> {
+        match msg.msg {
+            cosmic::dbus_activation::Details::ActivateAction { action, args } => {
+                match Command::from_action(&action, &args) {
+                    Some(command) => self.run_command(command),
+                    None => {
+                        tracing::warn!(%action, "unknown action from another instance");
+                        Task::none()
+                    }
+                }
+            }
+            _ => Task::none(),
         }
     }
 

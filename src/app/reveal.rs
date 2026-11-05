@@ -25,7 +25,7 @@ impl App {
     /// Raises the note's desk above windows, showing only that note, until Escape, a click
     /// outside it, or [`REVEAL_TIMEOUT`] without interaction.
     pub(super) fn reveal(&mut self, id: Uuid) -> Task<Message> {
-        let mut tasks = vec![self.end_reveal()];
+        let mut tasks = vec![self.set_visible(true), self.end_reveal()];
         let outputs = self.outputs();
         let Some(n) = self.notes.iter().find(|n| n.note.id == id) else {
             return Task::batch(tasks);
