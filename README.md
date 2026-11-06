@@ -156,7 +156,7 @@ session with simulated input, so read them before running them.
 
 - COSMIC only; no Flatpak, since sandboxed apps may not draw on the desktop layer.
 - Fractional display scaling has not been tested.
-- If COSMIC's desktop icons are turned on, they may cover the notes.
+- A desktop icon underneath a note can't be clicked; the note takes the click.
 
 ## License
 

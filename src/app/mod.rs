@@ -12,7 +12,7 @@ mod reveal;
 mod watch;
 
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use cosmic::app::{Core, Task};
 use cosmic::cctk::sctk::reexports::client::protocol::wl_output::WlOutput;
@@ -27,9 +27,10 @@ use uuid::Uuid;
 
 use cosmic_sticky::cli::Command;
 use cosmic_sticky::model::geometry::{self, OutputGeom, Rect};
+use cosmic_sticky::model::stacking::Verdict;
 use cosmic_sticky::model::{self as model, Categories, CategoryId, Font, Note, Rgb};
 use cosmic_sticky::storage::{Store, TrashedNote};
-use desk::Desk;
+use desk::{Competitor, Desk};
 use drag::{Drag, DragKind};
 use lifecycle::UndoChip;
 use list_window::{ListMessage, ListWindow};
@@ -141,6 +142,7 @@ impl cosmic::app::CosmicFlags for Flags {
 #[derive(Debug, Clone)]
 pub enum Message {
     Output(Box<OutputEvent>, WlOutput),
+    Competitor(SurfaceId, Competitor),
     CursorMoved(SurfaceId, Point),
     PointerPressed(SurfaceId),
     PointerReleased,
@@ -285,6 +287,81 @@ impl App {
                 }
                 None => Task::none(),
             },
+        }
+    }
+
+    fn on_competitor(&mut self, surface: SurfaceId, competitor: Competitor) -> Task<Message> {
+        if !self.visible {
+            return Task::none();
+        }
+        let Some((output, desk)) = self.desks.iter_mut().find(|(_, d)| d.surface == surface) else {
+            return Task::none();
+        };
+        let identifier = match competitor {
+            Competitor::Gone(identifier) => {
+                desk.stacking.gone(&identifier);
+                return Task::none();
+            }
+            Competitor::Overlaps(identifier) => identifier,
+        };
+        match desk.stacking.competitor(&identifier, Instant::now()) {
+            Verdict::Keep => Task::none(),
+            Verdict::GiveUp => {
+                tracing::warn!(output = %desk.geom.name, %identifier, "restacking too often; notes may not take clicks");
+                Task::none()
+            }
+            Verdict::Restack => {
+                tracing::info!(output = %desk.geom.name, %identifier, "another surface on our layer; restacking");
+                let busy = self.drag.is_some_and(|(d, _)| d.surface == surface)
+                    || self.reveal.as_ref().is_some_and(|r| r.surface == surface);
+                if busy {
+                    desk.restack_pending = true;
+                    return Task::none();
+                }
+                let output = output.clone();
+                self.restack(&output)
+            }
+        }
+    }
+
+    pub(super) fn restack_if_pending(&mut self, surface: SurfaceId) -> Task<Message> {
+        match self
+            .desks
+            .iter()
+            .find(|(_, d)| d.surface == surface && d.restack_pending)
+        {
+            Some((output, _)) => {
+                let output = output.clone();
+                self.restack(&output)
+            }
+            None => Task::none(),
+        }
+    }
+
+    /// Recreates the output's desk surface so it is above the other surfaces on its layer.
+    /// Keyboard focus and hover in the old surface are lost.
+    fn restack(&mut self, output: &WlOutput) -> Task<Message> {
+        let Some(desk) = self.desks.get(output) else {
+            return Task::none();
+        };
+        let (surface, name) = (desk.surface, desk.geom.name.clone());
+        if self.cursor.remove(&surface).is_some() {
+            self.set_hovered(None);
+        }
+        let outputs = self.outputs();
+        if let Some((id, _)) = self.editing
+            && let Some(n) = self.notes.iter().find(|n| n.note.id == id)
+            && self
+                .placement(&n.note, &outputs)
+                .is_some_and(|(o, _)| o == name)
+        {
+            self.editing = None;
+        }
+        self.save_dirty();
+        let rects = self.rects_on(&name);
+        match self.desks.get_mut(output) {
+            Some(desk) => desk.recreate(output, rects),
+            None => Task::none(),
         }
     }
 
@@ -441,7 +518,10 @@ impl App {
                 self.save(drag.note);
             }
         }
-        self.update_input_regions()
+        Task::batch([
+            self.update_input_regions(),
+            self.restack_if_pending(drag.surface),
+        ])
     }
 }
 
@@ -596,6 +676,11 @@ impl cosmic::Application for App {
             Event::PlatformSpecific(PlatformSpecific::Wayland(WaylandEvent::Output(e, o))) => {
                 Some(Message::Output(Box::new(e), o))
             }
+            Event::PlatformSpecific(PlatformSpecific::Wayland(WaylandEvent::OverlapNotify(
+                e,
+                _,
+                surface,
+            ))) => Competitor::from_event(e).map(|c| Message::Competitor(surface, c)),
             Event::Mouse(mouse::Event::CursorMoved { position }) => {
                 Some(Message::CursorMoved(surface, position))
             }
@@ -674,6 +759,7 @@ impl App {
     fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Output(event, output) => self.on_output(*event, output),
+            Message::Competitor(surface, competitor) => self.on_competitor(surface, competitor),
             Message::CursorMoved(surface, position) => {
                 if self.list.as_ref().is_some_and(|l| l.id == surface) {
                     tracing::debug!(x = position.x, y = position.y, "list cursor");

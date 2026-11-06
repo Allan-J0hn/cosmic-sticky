@@ -47,7 +47,7 @@ impl App {
         }
         if visible {
             for desk in self.desks.values_mut() {
-                *desk = Desk::new(desk.geom.clone());
+                desk.renew();
             }
             let tasks: Vec<_> = self
                 .desks

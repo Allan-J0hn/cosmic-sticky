@@ -91,7 +91,8 @@ impl App {
         let Some(desk) = self.desk_for_surface(reveal.surface) else {
             return Task::none();
         };
-        desk.lower(self.rects_on(&desk.geom.name))
+        let lower = desk.lower(self.rects_on(&desk.geom.name));
+        Task::batch([lower, self.restack_if_pending(reveal.surface)])
     }
 
     pub(super) fn revealed_on(&self, surface: SurfaceId) -> Option<Uuid> {
