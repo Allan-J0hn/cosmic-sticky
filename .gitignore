@@ -2,3 +2,5 @@
 /vendor/
 /.cargo/
 *.tmp
+/PLAN.md
+/CLAUDE.md
