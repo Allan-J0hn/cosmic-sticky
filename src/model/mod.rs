@@ -5,6 +5,7 @@ pub mod color;
 pub mod geometry;
 pub mod note;
 pub mod search;
+pub mod stacking;
 
 pub use category::{Categories, Category, CategoryError, CategoryId};
 pub use color::{PALETTE, Rgb};

@@ -342,15 +342,38 @@ recreates the desk surfaces, and the state persists in `settings.yaml`.
 | Plain files, live reload | `storage` tests; live reload confirmed by user |
 | `just install`, autostart, idle CPU ~0% | scratch install; idle 0 ticks (M3); autostart confirmed by user |
 
+### Post-M7 fixes
+**Notes ignored clicks after login (2026-11-05).** The notes were visible but only usable through
+reveal from the list.
+- Cause: cosmic-files-applet maps a transparent full-output surface on the Bottom layer of every
+  output, with no input region (so it takes input everywhere), whatever `show_content` says.
+  cosmic-comp (`ec674cd`, `shell/focus/order.rs`) hit-tests one layer's surfaces newest first,
+  checking each one's input region, and smithay's layer map keeps them in map order. During
+  development the app was always started by hand after login, so ours was newest. With
+  autostart (M7), cosmic-files maps after us.
+- Fix: each desk surface subscribes to `zcosmic_overlap_notify_v1`. When another client's
+  Bottom-layer surface that the desk hasn't seen overlaps it, the desk surface is destroyed and
+  recreated, which makes it the newest. Clicks outside notes still fall through to cosmic-files.
+- The compositor reports every existing overlap to a new surface, so the desk remembers the
+  surfaces it has seen (`model::stacking`, unit tested) across restacks. It forgets them on
+  `layer_leave`, because identifiers (`wl_surface@N[client]`) are reused. At most 4 restacks per
+  desk in 30 s, in case another client does the same.
+- A restack waits for a drag or reveal on that desk to end. Hover and keyboard focus in the old
+  surface are lost, and unsaved edits are saved first. cosmic-comp only gives focus to newly
+  mapped Top/Overlay surfaces, so a restack never takes typing away from a window.
+- At startup, a cosmic-files surface that is already there also causes one restack, since its
+  position relative to ours can't be known. It's harmless.
+- Tradeoff: a desktop icon under a note can't be clicked.
+
 ## 5. Risks
 1. **libcosmic churn.** It is pinned via `Cargo.lock`, and upgrades are deliberate. HEAD
    currently doesn't resolve fresh.
 2. **Background layer has no pointer input** on this cosmic-comp, so we use Bottom. If a later
    COSMIC version changes Bottom-layer input or ordering, notes stop being clickable. The e2e
    scripts would catch it.
-3. **Desktop icons (cosmic-files desktop mode)** also use a full-screen Bottom surface with full
-   input. If you enable them, their surface may stack above ours and swallow clicks or draw over
-   notes. Not enabled here and untested.
+3. **cosmic-files' desktop surface** (Bottom layer, full output, takes all input) exists on every
+   output whether or not desktop icons are shown. When it maps after us it takes every click on
+   a note. *Hit after login on 2026-11-05 and fixed;* see "Post-M7 fixes".
 4. **Keyboard focus lingers** in a note after clicking the bare desktop (compositor behavior).
    Mitigated by Escape and widget unfocus. It can't be fully fixed from the client.
 5. **Memory:** about 16 MB per 1080p output while notes are shown. A 4K output costs about 64 MB.
