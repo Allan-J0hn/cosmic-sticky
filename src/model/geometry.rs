@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-pub const MIN_NOTE_SIZE: (f32, f32) = (160.0, 120.0);
+/// Wide enough for every header control.
+pub const MIN_NOTE_SIZE: (f32, f32) = (180.0, 120.0);
 pub const DEFAULT_NOTE_SIZE: (f32, f32) = (260.0, 240.0);
 const NEW_NOTE_GAP: f32 = 16.0;
 

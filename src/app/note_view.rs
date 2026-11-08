@@ -36,6 +36,7 @@ pub enum Panel {
     Category { creating: bool },
     Color,
     Font,
+    TextSize,
 }
 
 #[derive(Clone, Copy)]
@@ -177,6 +178,10 @@ fn header<'a>(
                     .center(Length::Fixed(f32::from(ICON_SIZE))),
                 Message::OpenPanel(id, Panel::Font)
             ),
+            tap(
+                symbolic("format-text-larger-symbolic", colors),
+                Message::OpenPanel(id, Panel::TextSize)
+            ),
             tap(symbolic(mode_icon, colors), Message::ToggleMode(id)),
         ]
         .spacing(2)
@@ -216,6 +221,11 @@ fn editor_style(colors: NoteColors) -> impl Fn(&cosmic::Theme, Status) -> text_e
     }
 }
 
+/// How much bigger than the base sizes this note's text is drawn.
+fn text_scale(note: &Note) -> f32 {
+    fonts::scale(note.font) * note.text_size.factor()
+}
+
 fn title_view<'a>(parts: &NoteParts<'a>, colors: NoteColors) -> Element<'a, Message> {
     let id = parts.note.id;
     let font = parts.note.font;
@@ -229,7 +239,7 @@ fn title_view<'a>(parts: &NoteParts<'a>, colors: NoteColors) -> Element<'a, Mess
             }
             Binding::from_key_press(key)
         })
-        .size(TITLE_SIZE * fonts::scale(font))
+        .size(TITLE_SIZE * text_scale(parts.note))
         .font(fonts::title(font))
         .padding([2, 12])
         .style(editor_style(colors))
@@ -239,7 +249,7 @@ fn title_view<'a>(parts: &NoteParts<'a>, colors: NoteColors) -> Element<'a, Mess
 fn content_view<'a>(parts: &NoteParts<'a>, colors: NoteColors) -> Element<'a, Message> {
     let id = parts.note.id;
     let font = parts.note.font;
-    let size = BODY_SIZE * fonts::scale(font);
+    let size = BODY_SIZE * text_scale(parts.note);
     match &parts.note.content {
         Content::Text(_) => editor(parts.body)
             .id(editor_id(id, Field::Body))
@@ -257,7 +267,15 @@ fn content_view<'a>(parts: &NoteParts<'a>, colors: NoteColors) -> Element<'a, Me
                 .zip(parts.items)
                 .enumerate()
                 .map(|(i, (item, content))| {
-                    item_row(id, i, item.checked, content, parts.hovered, font, colors)
+                    item_row(
+                        id,
+                        i,
+                        item.checked,
+                        content,
+                        parts.hovered,
+                        (font, size),
+                        colors,
+                    )
                 });
             let add = tap(
                 row![
@@ -281,7 +299,7 @@ fn item_row<'a>(
     checked: bool,
     content: &'a text_editor::Content,
     hovered: bool,
-    font: cosmic_sticky::model::Font,
+    (font, size): (cosmic_sticky::model::Font, f32),
     colors: NoteColors,
 ) -> Element<'a, Message> {
     let empty = content.text().is_empty();
@@ -314,7 +332,7 @@ fn item_row<'a>(
             }
             Binding::from_key_press(key)
         })
-        .size(BODY_SIZE * fonts::scale(font))
+        .size(size)
         .font(fonts::regular(font))
         .padding(0)
         .style(editor_style(text_colors));

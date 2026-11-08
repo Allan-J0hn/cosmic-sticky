@@ -10,7 +10,7 @@ pub mod stacking;
 pub use category::{Categories, Category, CategoryError, CategoryId};
 pub use color::{PALETTE, Rgb};
 pub use geometry::{OutputGeom, Rect};
-pub use note::{ChecklistItem, Content, Font, Mode, Note};
+pub use note::{ChecklistItem, Content, Font, Mode, Note, TextSize};
 
 /// Current time at second precision, so timestamps in note files stay readable.
 pub fn now() -> jiff::Timestamp {

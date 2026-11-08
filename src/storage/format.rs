@@ -6,7 +6,9 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::model::{Categories, Category, CategoryId, Content, Font, Mode, Note, Rect, Rgb};
+use crate::model::{
+    Categories, Category, CategoryId, Content, Font, Mode, Note, Rect, Rgb, TextSize,
+};
 
 use crate::model::geometry::DEFAULT_NOTE_SIZE;
 
@@ -46,6 +48,12 @@ struct Frontmatter {
     color_override: Option<Rgb>,
     #[serde(default, deserialize_with = "font_or_default")]
     font: Font,
+    #[serde(
+        default,
+        skip_serializing_if = "TextSize::is_default",
+        deserialize_with = "text_size_or_default"
+    )]
+    text_size: TextSize,
     #[serde(default, deserialize_with = "null_as_default")]
     mode: Mode,
     #[serde(default)]
@@ -90,6 +98,20 @@ fn font_or_default<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Font, D::Er
         .unwrap_or_default())
 }
 
+/// Out-of-range sizes are clamped; a value that isn't a number gives the default size.
+fn text_size_or_default<'de, D: serde::Deserializer<'de>>(d: D) -> Result<TextSize, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Raw {
+        Number(f64),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Option::<Raw>::deserialize(d)? {
+        Some(Raw::Number(n)) => TextSize::from_f64(n),
+        _ => TextSize::DEFAULT,
+    })
+}
+
 fn default_width() -> f32 {
     DEFAULT_WIDTH
 }
@@ -106,6 +128,7 @@ pub fn note_to_markdown(note: &Note, trashed_at: Option<Timestamp>) -> Result<St
         category: note.category.clone(),
         color_override: note.color_override,
         font: note.font,
+        text_size: note.text_size,
         mode: note.mode(),
         x: note.rect.x,
         y: note.rect.y,
@@ -149,6 +172,7 @@ pub fn note_from_markdown(
         category: fm.category,
         color_override: fm.color_override,
         font: fm.font,
+        text_size: fm.text_size,
         content: Content::from_markdown(fm.mode, &body),
         rect: Rect::new(fm.x, fm.y, fm.width, fm.height),
         output: fm.output,
@@ -414,6 +438,41 @@ mod tests {
         let text = "---\ntitle: hi\nfont: wingdings\n---\nbody";
         let (n, _) = note_from_markdown(text, Uuid::nil(), Timestamp::UNIX_EPOCH).unwrap();
         assert_eq!((n.title.as_str(), n.font), ("hi", Font::Sans));
+    }
+
+    #[test]
+    fn text_size_round_trips_and_default_is_not_written() {
+        let mut n = sample();
+        let md = note_to_markdown(&n, None).unwrap();
+        assert!(!md.contains("text_size"), "{md}");
+
+        n.text_size = TextSize::new(150);
+        let md = note_to_markdown(&n, None).unwrap();
+        assert!(md.contains("text_size: 150\n"), "{md}");
+        assert_eq!(round_trip(&n), n);
+    }
+
+    #[test]
+    fn hand_written_text_sizes() {
+        for (value, expected) in [
+            ("120", 120),
+            ("117.6", 118),
+            ("5", TextSize::MIN),
+            ("100000", TextSize::MAX),
+            ("-3", TextSize::MIN),
+            ("big", 100),
+            ("\"150\"", 100),
+            ("[1, 2]", 100),
+            ("{a: 1}", 100),
+            ("", 100),
+            ("~", 100),
+        ] {
+            let text = format!("---\ntitle: hi\ntext_size: {value}\n---\nbody");
+            let (n, _) = note_from_markdown(&text, Uuid::nil(), Timestamp::UNIX_EPOCH)
+                .unwrap_or_else(|e| panic!("{value:?}: {e}"));
+            assert_eq!(n.text_size.percent(), expected, "{value:?}");
+            assert_eq!(n.title, "hi", "{value:?}");
+        }
     }
 
     #[test]

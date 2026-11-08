@@ -24,6 +24,59 @@ pub enum Font {
     Terminal,
 }
 
+/// Text size as a percentage of the font's normal size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct TextSize(u16);
+
+impl TextSize {
+    pub const DEFAULT: Self = Self(100);
+    pub const MIN: u16 = 50;
+    pub const MAX: u16 = 300;
+    /// The sizes offered in the picker.
+    pub const STEPS: [Self; 8] = [
+        Self(80),
+        Self(90),
+        Self(100),
+        Self(115),
+        Self(130),
+        Self(150),
+        Self(175),
+        Self(200),
+    ];
+
+    pub fn new(percent: u16) -> Self {
+        Self(percent.clamp(Self::MIN, Self::MAX))
+    }
+
+    /// From a hand-edited value; anything unusable gives the default.
+    pub fn from_f64(percent: f64) -> Self {
+        if percent.is_finite() {
+            Self::new(percent.round().clamp(0.0, f64::from(u16::MAX)) as u16)
+        } else {
+            Self::DEFAULT
+        }
+    }
+
+    pub fn percent(self) -> u16 {
+        self.0
+    }
+
+    pub fn factor(self) -> f32 {
+        f32::from(self.0) / 100.0
+    }
+
+    pub fn is_default(&self) -> bool {
+        *self == Self::DEFAULT
+    }
+}
+
+impl Default for TextSize {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Mode {
@@ -156,6 +209,7 @@ pub struct Note {
     pub category: CategoryId,
     pub color_override: Option<Rgb>,
     pub font: Font,
+    pub text_size: TextSize,
     pub content: Content,
     pub rect: Rect,
     /// Connector name, e.g. `eDP-1`.
@@ -179,6 +233,7 @@ impl Note {
             category: category.id.clone(),
             color_override: None,
             font: Font::default(),
+            text_size: TextSize::DEFAULT,
             content: Content::empty(mode),
             rect,
             output,
@@ -391,6 +446,28 @@ mod tests {
         assert!(!n.is_blank());
         n.set_mode(Mode::Text);
         assert!(n.items_mut().is_none());
+    }
+
+    #[test]
+    fn text_size_is_clamped() {
+        assert_eq!(TextSize::new(10).percent(), TextSize::MIN);
+        assert_eq!(TextSize::new(1000).percent(), TextSize::MAX);
+        assert_eq!(TextSize::new(115).percent(), 115);
+        assert_eq!(TextSize::from_f64(122.6).percent(), 123);
+        assert_eq!(TextSize::from_f64(-5.0).percent(), TextSize::MIN);
+        assert_eq!(TextSize::from_f64(1e9).percent(), TextSize::MAX);
+        assert_eq!(TextSize::from_f64(f64::NAN), TextSize::DEFAULT);
+        assert_eq!(TextSize::from_f64(f64::INFINITY), TextSize::DEFAULT);
+        assert!((TextSize::new(150).factor() - 1.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn text_size_steps_are_valid_and_include_default() {
+        assert!(TextSize::STEPS.contains(&TextSize::DEFAULT));
+        assert!(TextSize::STEPS.windows(2).all(|w| w[0] < w[1]));
+        for step in TextSize::STEPS {
+            assert_eq!(TextSize::new(step.percent()), step);
+        }
     }
 
     #[test]
