@@ -28,7 +28,7 @@ use uuid::Uuid;
 use cosmic_sticky::cli::Command;
 use cosmic_sticky::model::geometry::{self, OutputGeom, Rect};
 use cosmic_sticky::model::stacking::Verdict;
-use cosmic_sticky::model::{self as model, Categories, CategoryId, Font, Note, Rgb};
+use cosmic_sticky::model::{self as model, Categories, CategoryId, Font, Note, Rgb, TextSize};
 use cosmic_sticky::storage::{Store, TrashedNote};
 use desk::{Competitor, Desk};
 use drag::{Drag, DragKind};
@@ -162,6 +162,7 @@ pub enum Message {
     ChooseCategory(Uuid, CategoryId),
     SetColor(Uuid, Option<Rgb>),
     SetFont(Uuid, Font),
+    SetTextSize(Uuid, TextSize),
     NewNote(Uuid),
     SaveDue(Uuid, u64),
     IdleUnfocus(u64),
@@ -857,6 +858,7 @@ impl App {
             Message::ChooseCategory(id, category) => self.choose_category(id, category),
             Message::SetColor(id, color) => self.set_color(id, color),
             Message::SetFont(id, font) => self.set_font(id, font),
+            Message::SetTextSize(id, size) => self.set_text_size(id, size),
             Message::NewNote(parent) => self.new_note_beside(parent),
             Message::DeleteNote(id) => self.delete_note(id),
             Message::Restore(id) => self.restore(id),

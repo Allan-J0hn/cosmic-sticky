@@ -18,6 +18,7 @@ font-marker = Marker
 font-typewriter = Typewriter
 font-script = Retro script
 font-terminal = Terminal
+text-size = Text size
 note-deleted = Note deleted
 undo = Undo
 tab-notes = Notes

@@ -8,7 +8,7 @@ use super::note_view::{Field, Panel};
 use super::{App, NoteState, single_line};
 use cosmic_sticky::model::geometry::{self, DEFAULT_NOTE_SIZE};
 use cosmic_sticky::model::{
-    self as model, CategoryId, ChecklistItem, Content, Font, Mode, Note, Rgb,
+    self as model, CategoryId, ChecklistItem, Content, Font, Mode, Note, Rgb, TextSize,
 };
 
 use super::Message;
@@ -216,6 +216,16 @@ impl App {
         n.note.font = font;
         n.panel = None;
         tracing::debug!(note = %id, ?font, "font set");
+        self.edited(id)
+    }
+
+    pub(super) fn set_text_size(&mut self, id: Uuid, size: TextSize) -> Task<Message> {
+        let Some(n) = self.note_mut(id) else {
+            return Task::none();
+        };
+        n.note.text_size = size;
+        n.panel = None;
+        tracing::debug!(note = %id, size = size.percent(), "text size set");
         self.edited(id)
     }
 

@@ -10,12 +10,14 @@ use super::Message;
 use super::note_view::{NoteColors, Panel, color, symbolic, tap};
 use crate::fl;
 use crate::fonts;
-use cosmic_sticky::model::{Categories, Note, PALETTE, Rgb};
+use cosmic_sticky::model::{Categories, Note, PALETTE, Rgb, TextSize};
 
 const SWATCH: f32 = 22.0;
 const SWATCHES_PER_ROW: usize = 6;
 /// Two font tiles fit side by side in a default-size note.
 const FONT_TILE: f32 = 110.0;
+/// Four size tiles per row in a default-size note; tall enough for the largest preview.
+const SIZE_TILE: (f32, f32) = (52.0, 68.0);
 
 /// Category, color or font choices, shown in place of the note's content.
 pub fn view<'a>(
@@ -99,6 +101,16 @@ pub fn view<'a>(
                 flex_row(tiles).row_spacing(2).column_spacing(2).into(),
             )
         }
+        Panel::TextSize => {
+            let tiles = TextSize::STEPS
+                .iter()
+                .map(|&s| size_tile(note, s, colors))
+                .collect();
+            (
+                fl!("text-size"),
+                flex_row(tiles).row_spacing(2).column_spacing(2).into(),
+            )
+        }
     };
     column![
         row![
@@ -134,6 +146,44 @@ fn dot<'a>(c: Rgb, selected: bool, colors: NoteColors) -> Element<'a, Message> {
             ..Default::default()
         })
         .into()
+}
+
+fn size_tile<'a>(note: &Note, size: TextSize, colors: NoteColors) -> Element<'a, Message> {
+    let ring = if note.text_size == size {
+        colors.text
+    } else {
+        cosmic::iced::Color::TRANSPARENT
+    };
+    let preview = 14.0 * fonts::scale(note.font) * size.factor();
+    tap(
+        container(
+            column![
+                text("Aa")
+                    .size(preview)
+                    .font(fonts::regular(note.font))
+                    .wrapping(Wrapping::None),
+                text(format!("{}%", size.percent()))
+                    .size(11)
+                    .wrapping(Wrapping::None),
+            ]
+            .spacing(2)
+            .align_x(Alignment::Center),
+        )
+        .width(Length::Fixed(SIZE_TILE.0))
+        .height(Length::Fixed(SIZE_TILE.1))
+        .align_x(Alignment::Center)
+        .align_y(Alignment::End)
+        .padding([0, 0, 2, 0])
+        .style(move |_| container::Style {
+            border: Border {
+                radius: 4.0.into(),
+                width: 1.5,
+                color: ring,
+            },
+            ..Default::default()
+        }),
+        Message::SetTextSize(note.id, size),
+    )
 }
 
 fn check<'a>(selected: bool, colors: NoteColors) -> Element<'a, Message> {

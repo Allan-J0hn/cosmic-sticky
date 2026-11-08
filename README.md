@@ -22,6 +22,7 @@ while idle and redraws only when something changes.
 - **Readable on any color.** Text switches between black and white for good contrast.
 - **Ten fonts,** each previewed in the picker: Sans, Serif, Monospace, Handwriting, Neat hand,
   Architect, plus a few with more character: Marker, Typewriter, Retro script and Terminal.
+- **Text size per note,** from 80% to 200%.
 - **Trash with undo.** Deleting a note shows an *Undo* button for 10 seconds; deleted notes
   stay in the trash for 7 days and can be restored from the list.
 - **Notes list.** Search titles and text, filter by category, click a note to bring it in
@@ -70,6 +71,7 @@ Hover over a note to show its controls:
 | colored dot | Category |
 | eyedropper | Note color, or back to the category's color |
 | **Aa** | Font |
+| **A** | Text size |
 | list icon | Switch between text and checklist |
 | top edge | Drag to move |
 | ◢ | Drag to resize |
@@ -116,6 +118,7 @@ title: Groceries
 category: todos
 color_override: null
 font: handwriting
+text_size: 115
 mode: checklist
 x: 700.0
 "y": 500.0
@@ -128,6 +131,8 @@ modified: "2026-11-04T17:05:00Z"
 - [ ] coffee beans
 - [x] eggs
 ```
+
+`text_size` is a percentage and is left out at the default of 100.
 
 Files are written atomically (temporary file, then rename), so a crash never leaves a
 half-written note. The folder can be synced between machines with Syncthing or similar.
